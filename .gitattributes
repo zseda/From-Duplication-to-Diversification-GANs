@@ -1,0 +1,85 @@
+# Common settings that generally should always be used with your language specific settings
+
+# Auto detect text files and perform LF normalization
+*          text=auto
+
+#
+# The above will handle all files NOT found below
+#
+
+# Documents
+*.bibtex   text diff=bibtex
+*.doc      filter=lfs diff=lfs merge=lfs binary
+*.DOC      filter=lfs diff=lfs merge=lfs binary
+*.docx     filter=lfs diff=lfs merge=lfs binary
+*.DOCX     filter=lfs diff=lfs merge=lfs binary
+*.dot      filter=lfs diff=lfs merge=lfs binary
+*.DOT      filter=lfs diff=lfs merge=lfs binary
+*.pdf      filter=lfs diff=lfs merge=lfs binary
+*.PDF      filter=lfs diff=lfs merge=lfs binary
+*.rtf      filter=lfs diff=lfs merge=lfs binary
+*.RTF      filter=lfs diff=lfs merge=lfs binary
+*.md       text diff=markdown
+*.mdx      text diff=markdown
+*.tex      text diff=tex
+*.adoc     text
+*.textile  text
+*.mustache text
+*.csv      text
+*.tab      text
+*.tsv      text
+*.txt      text
+*.sql      text
+*.epub     diff=astextplain
+
+# Graphics
+*.png      filter=lfs diff=lfs merge=lfs binary
+*.jpg      filter=lfs diff=lfs merge=lfs binary
+*.jpeg     filter=lfs diff=lfs merge=lfs binary
+*.gif      filter=lfs diff=lfs merge=lfs binary
+*.tif      filter=lfs diff=lfs merge=lfs binary
+*.tiff     filter=lfs diff=lfs merge=lfs binary
+*.ico      filter=lfs diff=lfs merge=lfs binary
+# SVG treated as text by default.
+*.svg      text
+# If you want to treat it as binary,
+# use the following line instead.
+# *.svg    binary
+*.eps      filter=lfs diff=lfs merge=lfs binary
+
+# Scripts
+*.bash     text eol=lf
+*.fish     text eol=lf
+*.sh       text eol=lf
+*.zsh      text eol=lf
+# These are explicitly windows files and should use crlf
+*.bat      text eol=crlf
+*.cmd      text eol=crlf
+*.ps1      text eol=crlf
+
+# Serialisation
+*.json     text
+*.toml     text
+*.xml      text
+*.yaml     text
+*.yml      text
+
+# Archives
+*.7z       filter=lfs diff=lfs merge=lfs binary
+*.gz       filter=lfs diff=lfs merge=lfs binary
+*.tar      filter=lfs diff=lfs merge=lfs binary
+*.tar.gz   filter=lfs diff=lfs merge=lfs binary
+*.tgz      filter=lfs diff=lfs merge=lfs binary
+*.zip      filter=lfs diff=lfs merge=lfs binary
+*.rar      filter=lfs diff=lfs merge=lfs binary
+
+# Text files where line endings should be preserved
+*.patch    -text
+
+#
+# Exclude files from exporting
+#
+
+.gitattributes export-ignore
+.gitignore     export-ignore
+.gitkeep       export-ignore
