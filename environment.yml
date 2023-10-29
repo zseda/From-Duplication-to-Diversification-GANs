@@ -1,0 +1,30 @@
+name: independent_study_gans
+channels:
+  - defaults
+  - conda-forge
+  - nvidia
+  - pytorch
+dependencies:
+  #  python & pip 
+  - conda-forge::python=3.10
+  - conda-forge::pip
+  # pytorch
+  - pytorch::pytorch=2.1
+  - pytorch::torchvision=0.16
+  - pytorch::pytorch-cuda=11.8
+  # ml packages
+  - conda-forge::pytorch-lightning=2.1
+  - conda-forge::einops
+  - conda-forge::timm
+  - conda-forge::wandb
+  # python packages
+  - conda-forge::opencv
+  - conda-forge::pydantic
+  - conda-forge::pydantic-settings
+  - conda-forge::pandas
+  - conda-forge::typer
+  - conda-forge::loguru
+  - conda-forge::pytest
+  - conda-forge::pytest-mock
+
+
