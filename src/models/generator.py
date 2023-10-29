@@ -99,9 +99,18 @@ class Generator(nn.Module):
         self.generative = nn.Sequential(
             # TODO: input resolution: ???
             # TODO: figure out if upsampling or downsampling is needed (e.g.) timm output is too large or too small
+            # *LAZY* conv2d layer which automatically calculates number of in_channels
+            # from merged and outputs the specified channel
+            nn.LazyConv2d(out_channels=16, kernel_size=1, padding="same"),
             CustomDecodeModule(in_channels=16),
             CustomDecodeModule(in_channels=32),
             CustomDecodeModule(in_channels=64),
+            CustomLayer(
+                in_channels=64,
+                out_channels=3,
+                norm_layer=nn.InstanceNorm2d,
+                activation_function=nn.Identity,
+            ),
         )
 
     def forward(self, img, noise):
@@ -115,4 +124,7 @@ class Generator(nn.Module):
         # TODO: check out adaptive instance normalization
         merged = torch.cat((features, noise), dim=1)
 
-        return features
+        # compute output image
+        output_img = self.generative(merged)
+
+        return output_img
