@@ -35,9 +35,12 @@ class GAN(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         images, _ = batch
+        images = images.to(self.device)
         batch_size = images.size(0)
-        valid = torch.ones(batch_size, 1)
-        fake = torch.zeros(batch_size, 1)
+
+        # Move the valid and fake tensors to the same device as the model
+        valid = torch.ones(batch_size, 1).to(self.device)
+        fake = torch.zeros(batch_size, 1).to(self.device)
 
         # Get both optimizers
         opt_d, opt_g = self.optimizers()
@@ -51,6 +54,7 @@ class GAN(pl.LightningModule):
         loss_d = (real_loss + fake_loss) / 2
         self.manual_backward(loss_d)
         opt_d.step()
+
         # Generator update
         opt_g.zero_grad()
         gen_imgs = self.generator(self.fixed_noise)
@@ -73,7 +77,7 @@ class GAN(pl.LightningModule):
         return {
             "loss": loss_g,
             "log": {"loss_generator": loss_g},
-        }  # You can modify the logs here as per your requirements
+        }
 
     def configure_optimizers(self):
         optimizer_g = torch.optim.Adam(
