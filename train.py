@@ -14,14 +14,13 @@ seed_everything(42)  # For reproducibility
 class GAN(pl.LightningModule):
     def __init__(self):
         super(GAN, self).__init__()
-
-        self.generator = Generator()
+        self.fixed_noise = torch.rand(size=(2, 112, 14, 14)).to(self.device)
+        self.generator = Generator(self.fixed_noise)
         self.discriminator = Discriminator()
 
         self.criterion = torch.nn.BCELoss()
         self.sample_val_images = None
 
-        self.fixed_noise = torch.rand(size=(2, 112, 14, 14)).to(self.device)
         self.automatic_optimization = False
 
     def on_epoch_start(self):
