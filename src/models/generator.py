@@ -14,6 +14,7 @@ class CustomLayer(nn.Module):
         norm_layer=nn.InstanceNorm2d,
         activation_function=nn.LeakyReLU,
     ):
+        super().__init__()
         self.sequential = nn.Sequential(
             # 1st layer
             nn.Conv2d(
@@ -21,17 +22,20 @@ class CustomLayer(nn.Module):
                 # options:encoding, decoding,keep the same
                 # decide the output channel based on your goal
                 # decoding might more sense since we want diversity in the output
-                out_channels=16,
+                out_channels=out_channels,
                 kernel_size=3,
                 padding="same",
             ),
             # TODO: Adaptive Instance Normalization
-            norm_layer(num_features=16),
+            norm_layer(num_features=out_channels),
             activation_function(),
         )
 
     def forward(self, x):
-        return self.sequential(x)
+        print("x.shape", x.shape)
+        out = self.sequential(x)
+        print("out.shape", out.shape)
+        return out
 
 
 class DecodingModule(nn.Module):
@@ -67,10 +71,13 @@ class DecodingModule(nn.Module):
         )
 
     def forward(self, x):
+        print("x.shape", x.shape)
         # feed input to sequential module => compute output features
         sequential_out = self.sequential(x)
+        print("sequential.shape", sequential_out.shape)
         # transform input to match feature match size of output layer of sequential module
         transformed_input = self.shortcut(x)
+        print("transformed_input.shape", transformed_input.shape)
 
         # residual output
         return transformed_input + sequential_out
@@ -106,7 +113,7 @@ class Generator(nn.Module):
             CustomDecodeModule(in_channels=32),
             CustomDecodeModule(in_channels=64),
             CustomLayer(
-                in_channels=64,
+                in_channels=128,
                 out_channels=3,
                 norm_layer=nn.InstanceNorm2d,
                 activation_function=nn.Identity,
@@ -115,7 +122,7 @@ class Generator(nn.Module):
 
     def forward(self, img, noise):
         # extract features from image
-        features = self.feature_extractor(img)
+        features = self.feature_extractor(img)[0]
         # TODO: test the need of subnetwork for noise processing
 
         # merge noise with features
