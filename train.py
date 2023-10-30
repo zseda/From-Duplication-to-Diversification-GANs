@@ -84,11 +84,11 @@ wandb.init(
     project="GAN-CIFAR10", name="GAN-run", settings=wandb.Settings(mode="online")
 )
 
-logger = WandbLogger()
+wandb_logger = WandbLogger()
 gpus = 1 if torch.cuda.is_available() else 0
 # start training
 logger.info("Starting training...")
-trainer = pl.Trainer(max_epochs=10, gpus=gpus, logger=logger)
+trainer = pl.Trainer(max_epochs=10, gpus=gpus, logger=wandb_logger)
 gan = GAN()
 trainer.fit(gan)
 logger.info("Finished training!")
