@@ -88,7 +88,9 @@ wandb_logger = WandbLogger()
 gpus = 1 if torch.cuda.is_available() else 0
 # start training
 logger.info("Starting training...")
-trainer = pl.Trainer(max_epochs=10, accelerator="gpu", devices=1, logger=wandb_logger)
+torch.set_float32_matmul_precision("medium")  # or 'high' based on your precision needs
+trainer = pl.Trainer(max_epochs=10, accelerator="gpu", gpus=gpus, logger=wandb_logger)
 gan = GAN()
 trainer.fit(gan)
+wandb.finish()
 logger.info("Finished training!")
