@@ -24,7 +24,7 @@ class CustomLayer(nn.Module):
                 # decoding might more sense since we want diversity in the output
                 out_channels=out_channels,
                 kernel_size=3,
-                padding="same",
+                padding=1,
             ),
             # TODO: Adaptive Instance Normalization
             norm_layer(num_features=out_channels),
@@ -67,7 +67,7 @@ class DecodingModule(nn.Module):
             in_channels=in_channels,
             out_channels=int(in_channels * 2),
             kernel_size=1,
-            padding="same",
+            padding=0,
         )
 
     def forward(self, x):
@@ -108,7 +108,7 @@ class Generator(nn.Module):
             # TODO: figure out if upsampling or downsampling is needed (e.g.) timm output is too large or too small
             # *LAZY* conv2d layer which automatically calculates number of in_channels
             # from merged and outputs the specified channel
-            nn.LazyConv2d(out_channels=16, kernel_size=1, padding="same"),
+            nn.LazyConv2d(out_channels=16, kernel_size=1, padding=0),
             CustomDecodeModule(in_channels=16),
             CustomDecodeModule(in_channels=32),
             CustomDecodeModule(in_channels=64),

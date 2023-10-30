@@ -4,18 +4,15 @@ import pytorch_lightning as pl
 import wandb
 from loguru import logger
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning import seed_everything
 from src.models import Generator, Discriminator
 from src.data import get_cifar10_dataloader
-
-seed_everything(42)  # For reproducibility
 
 
 class GAN(pl.LightningModule):
     def __init__(self):
         super(GAN, self).__init__()
-        self.fixed_noise = torch.rand(size=(2, 112, 14, 14)).to(self.device)
-        self.generator = Generator(self.fixed_noise)
+        self.noise = torch.rand(size=(2, 112, 14, 14)).to(self.device)
+        self.generator = Generator()
         self.discriminator = Discriminator()
 
         self.criterion = torch.nn.BCELoss()
@@ -29,8 +26,8 @@ class GAN(pl.LightningModule):
                 self.device
             )
 
-    def forward(self, z):
-        return self.generator(z)
+    def forward(self, img, z):
+        return self.generator(img, z)
 
     def training_step(self, batch, batch_idx):
         images, _ = batch
@@ -47,16 +44,14 @@ class GAN(pl.LightningModule):
         # Discriminator update
         opt_d.zero_grad()
         real_loss = self.criterion(self.discriminator(images), valid)
-        fake_loss = self.criterion(
-            self.discriminator(self.generator(self.fixed_noise)), fake
-        )
+        fake_loss = self.criterion(self.discriminator(self.generator(self.noise)), fake)
         loss_d = (real_loss + fake_loss) / 2
         self.manual_backward(loss_d)
         opt_d.step()
 
         # Generator update
         opt_g.zero_grad()
-        gen_imgs = self.generator(self.fixed_noise)
+        gen_imgs = self.generator(images, self.noise)
         loss_g = self.criterion(self.discriminator(gen_imgs), valid)
         self.manual_backward(loss_g)
         opt_g.step()
