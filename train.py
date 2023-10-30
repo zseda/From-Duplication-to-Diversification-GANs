@@ -22,6 +22,7 @@ class GAN(pl.LightningModule):
         self.sample_val_images = None
 
         self.fixed_noise = torch.rand(size=(2, 112, 14, 14))
+        self.automatic_optimization = False
 
     def on_epoch_start(self):
         if self.sample_val_images is None:
@@ -35,35 +36,38 @@ class GAN(pl.LightningModule):
         batch_size = images.size(0)
         valid = torch.ones(batch_size, 1)
         fake = torch.zeros(batch_size, 1)
+        optimizer_d, optimizer_g = self.optimizers()
 
         # Discriminator update
-
-        if optimizer_idx == 0:
-            real_loss = self.criterion(self.discriminator(images), valid)
-            fake_loss = self.criterion(
-                self.discriminator(self.generator(self.fixed_noise)), fake
-            )
-            loss_d = (real_loss + fake_loss) / 2
-            return {"loss": loss_d, "log": {"loss_discriminator": loss_d}}
+        optimizer_d.zero_grad()
+        real_loss = self.criterion(self.discriminator(images), valid)
+        fake_loss = self.criterion(
+            self.discriminator(self.generator(self.fixed_noise)), fake
+        )
+        loss_d = (real_loss + fake_loss) / 2
+        loss_d.backward()
+        optimizer_d.step()
 
         # Generator update
-        if optimizer_idx == 1:
-            gen_imgs = self.generator(self.fixed_noise)
-            loss_g = self.criterion(self.discriminator(gen_imgs), valid)
+        optimizer_g.zero_grad()
+        gen_imgs = self.generator(self.fixed_noise)
+        loss_g = self.criterion(self.discriminator(gen_imgs), valid)
+        loss_g.backward()
+        optimizer_g.step()
 
-            # Log generated images
-            if batch_idx % 100 == 0:
-                with torch.no_grad():
-                    img_grid = torchvision.utils.make_grid(gen_imgs, normalize=True)
-                    self.logger.experiment.log(
-                        {
-                            "generated_images": [
-                                wandb.Image(img_grid, caption="Generated Images")
-                            ]
-                        }
-                    )
+        # Log generated images
+        if batch_idx % 100 == 0:
+            with torch.no_grad():
+                img_grid = torchvision.utils.make_grid(gen_imgs, normalize=True)
+                self.logger.experiment.log(
+                    {
+                        "generated_images": [
+                            wandb.Image(img_grid, caption="Generated Images")
+                        ]
+                    }
+                )
 
-            return {"loss": loss_g, "log": {"loss_generator": loss_g}}
+        return {"loss": loss_g, "log": {"loss_generator": loss_g}}
 
     def configure_optimizers(self):
         optimizer_g = torch.optim.Adam(
