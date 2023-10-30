@@ -1,6 +1,6 @@
 import torch
-from models.generator import Generator
-from models.discriminator import Discriminator
+from src.models import Generator
+from src.models import Discriminator
 
 
 def main():
