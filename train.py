@@ -31,29 +31,30 @@ class GAN(pl.LightningModule):
     def forward(self, z):
         return self.generator(z)
 
-    def training_step(self, batch, batch_idx, optimizer_idx):
+    def training_step(self, batch, batch_idx):
         images, _ = batch
         batch_size = images.size(0)
         valid = torch.ones(batch_size, 1)
         fake = torch.zeros(batch_size, 1)
-        optimizer_d, optimizer_g = self.optimizers()
+
+        # Get both optimizers
+        opt_d, opt_g = self.optimizers()
 
         # Discriminator update
-        optimizer_d.zero_grad()
+        opt_d.zero_grad()
         real_loss = self.criterion(self.discriminator(images), valid)
         fake_loss = self.criterion(
             self.discriminator(self.generator(self.fixed_noise)), fake
         )
         loss_d = (real_loss + fake_loss) / 2
-        loss_d.backward()
-        optimizer_d.step()
-
+        self.manual_backward(loss_d)
+        opt_d.step()
         # Generator update
-        optimizer_g.zero_grad()
+        opt_g.zero_grad()
         gen_imgs = self.generator(self.fixed_noise)
         loss_g = self.criterion(self.discriminator(gen_imgs), valid)
-        loss_g.backward()
-        optimizer_g.step()
+        self.manual_backward(loss_g)
+        opt_g.step()
 
         # Log generated images
         if batch_idx % 100 == 0:
@@ -67,7 +68,10 @@ class GAN(pl.LightningModule):
                     }
                 )
 
-        return {"loss": loss_g, "log": {"loss_generator": loss_g}}
+        return {
+            "loss": loss_g,
+            "log": {"loss_generator": loss_g},
+        }  # You can modify the logs here as per your requirements
 
     def configure_optimizers(self):
         optimizer_g = torch.optim.Adam(
