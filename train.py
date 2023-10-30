@@ -21,12 +21,14 @@ class GAN(pl.LightningModule):
         self.criterion = torch.nn.BCELoss()
         self.sample_val_images = None
 
-        self.fixed_noise = torch.rand(size=(2, 112, 14, 14))
+        self.fixed_noise = torch.rand(size=(2, 112, 14, 14)).to(self.device)
         self.automatic_optimization = False
 
     def on_epoch_start(self):
         if self.sample_val_images is None:
-            self.sample_val_images = next(iter(self.train_dataloader()))[0]
+            self.sample_val_images = next(iter(self.train_dataloader()))[0].to(
+                self.device
+            )
 
     def forward(self, z):
         return self.generator(z)
