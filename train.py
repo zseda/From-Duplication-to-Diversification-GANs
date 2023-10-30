@@ -2,7 +2,7 @@ import torch
 import torchvision
 import pytorch_lightning as pl
 import wandb
-import loguru as logger
+from loguru import logger
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning import seed_everything
 from src.models import Generator, Discriminator
