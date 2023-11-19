@@ -84,7 +84,7 @@ class DecodingModule(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self):
+    def __init__(self, device):
         super().__init__()
 
         CustomDecodeModule = partial(
@@ -100,7 +100,7 @@ class Generator(nn.Module):
             features_only=True,
             # TODO: test diffrent output indices for feature extraction
             out_indices=[3],
-        )
+        ).to(device)
 
         # generative module
         self.generative = nn.Sequential(

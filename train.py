@@ -11,8 +11,7 @@ from src.data import get_cifar10_dataloader
 class GAN(pl.LightningModule):
     def __init__(self):
         super(GAN, self).__init__()
-        self.noise = torch.rand(size=(2, 112, 14, 14)).to(self.device)
-        self.generator = Generator().to(self.device)
+        self.generator = Generator(self.device).to(self.device)
         self.discriminator = Discriminator().to(self.device)
 
         self.criterion = torch.nn.BCELoss()
@@ -30,6 +29,7 @@ class GAN(pl.LightningModule):
         images, _ = batch
         images = images.to(self.device)
         batch_size = images.size(0)
+        noise = torch.rand(size=(2, 112, 14, 14)).to(self.device)
 
         # Move the valid and fake tensors to the same device as the model
         valid = torch.ones(batch_size, 1).to(self.device)
@@ -39,7 +39,7 @@ class GAN(pl.LightningModule):
         self.opt_d.zero_grad()
         real_loss = self.criterion(self.discriminator(images), valid)
         fake_loss = self.criterion(
-            self.discriminator(self.generator(images, self.noise)), fake
+            self.discriminator(self.generator(images, noise)), fake
         )
         loss_d = (real_loss + fake_loss) / 2
         self.manual_backward(loss_d)
@@ -47,7 +47,7 @@ class GAN(pl.LightningModule):
 
         # Generator update
         self.opt_g.zero_grad()
-        gen_imgs = self.generator(images, self.noise)
+        gen_imgs = self.generator(images, noise)
         loss_g = self.criterion(self.discriminator(gen_imgs), valid)
         self.manual_backward(loss_g)
         self.opt_g.step()
