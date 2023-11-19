@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import timm
 
@@ -13,4 +14,5 @@ class Discriminator(nn.Module):
 
     def forward(self, x):
         x = self.base_model(x)
+        x = torch.sigmoid(x)
         return x
