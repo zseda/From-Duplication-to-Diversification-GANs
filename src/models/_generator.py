@@ -32,9 +32,9 @@ class CustomLayer(nn.Module):
         )
 
     def forward(self, x):
-        print("x.shape", x.shape)
+        # print("x.shape", x.shape)
         out = self.sequential(x)
-        print("out.shape", out.shape)
+        # print("out.shape", out.shape)
         return out
 
 
@@ -71,13 +71,13 @@ class DecodingModule(nn.Module):
         )
 
     def forward(self, x):
-        print("x.shape", x.shape)
+        # print("x.shape", x.shape)
         # feed input to sequential module => compute output features
         sequential_out = self.sequential(x)
-        print("sequential.shape", sequential_out.shape)
+        # print("sequential.shape", sequential_out.shape)
         # transform input to match feature match size of output layer of sequential module
         transformed_input = self.shortcut(x)
-        print("transformed_input.shape", transformed_input.shape)
+        # print("transformed_input.shape", transformed_input.shape)
 
         # residual output
         return transformed_input + sequential_out
