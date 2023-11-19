@@ -9,7 +9,7 @@ class Discriminator(nn.Module):
 
         # Base model for feature extraction
         self.base_model = timm.create_model(
-            "efficientnet_b0",
+            "resnet18",
             pretrained=True,
             features_only=True,
             out_indices=[3],
