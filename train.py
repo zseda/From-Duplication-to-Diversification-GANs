@@ -12,8 +12,8 @@ class GAN(pl.LightningModule):
     def __init__(self):
         super(GAN, self).__init__()
         self.noise = torch.rand(size=(2, 112, 14, 14)).to(self.device)
-        self.generator = Generator()
-        self.discriminator = Discriminator()
+        self.generator = Generator().to(self.device)
+        self.discriminator = Discriminator().to(self.device)
 
         self.criterion = torch.nn.BCELoss()
         self.sample_val_images = None
