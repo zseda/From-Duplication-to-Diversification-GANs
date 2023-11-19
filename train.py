@@ -26,9 +26,6 @@ class GAN(pl.LightningModule):
                 self.device
             )
 
-    def forward(self, img, z):
-        return self.generator(img, z)
-
     def training_step(self, batch, batch_idx):
         images, _ = batch
         images = images.to(self.device)
@@ -38,23 +35,22 @@ class GAN(pl.LightningModule):
         valid = torch.ones(batch_size, 1).to(self.device)
         fake = torch.zeros(batch_size, 1).to(self.device)
 
-        # Get both optimizers
-        opt_d, opt_g = self.optimizers()
-
         # Discriminator update
-        opt_d.zero_grad()
+        self.opt_d.zero_grad()
         real_loss = self.criterion(self.discriminator(images), valid)
-        fake_loss = self.criterion(self.discriminator(self.generator(self.noise)), fake)
+        fake_loss = self.criterion(
+            self.discriminator(self.generator(images, self.noise)), fake
+        )
         loss_d = (real_loss + fake_loss) / 2
         self.manual_backward(loss_d)
-        opt_d.step()
+        self.opt_d.step()
 
         # Generator update
-        opt_g.zero_grad()
+        self.opt_g.zero_grad()
         gen_imgs = self.generator(images, self.noise)
         loss_g = self.criterion(self.discriminator(gen_imgs), valid)
         self.manual_backward(loss_g)
-        opt_g.step()
+        self.opt_g.step()
 
         # Log generated images
         if batch_idx % 100 == 0:
@@ -80,7 +76,10 @@ class GAN(pl.LightningModule):
         optimizer_d = torch.optim.Adam(
             self.discriminator.parameters(), lr=0.0002, betas=(0.5, 0.999)
         )
-        return [optimizer_d, optimizer_g], []
+        # Get both optimizers
+        self.opt_g = optimizer_g
+        self.opt_d = optimizer_d
+        return optimizer_d, optimizer_g
 
     def train_dataloader(self):
         logger.info("Loading training data...")
