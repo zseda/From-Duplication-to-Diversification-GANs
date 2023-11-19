@@ -13,13 +13,6 @@ def main():
 
     print("Generator output shape:", gen_output.shape)
 
-    # Test Discriminator
-    D = Discriminator()
-    dummy_output = torch.rand(size=(2, 3, 32, 32))
-    disc_output = D(dummy_output)
-
-    print("Discriminator output shape:", disc_output.shape)
-
 
 if __name__ == "__main__":
     main()

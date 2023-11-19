@@ -49,12 +49,13 @@ class GAN(pl.LightningModule):
         # Generator update
         self.opt_g.zero_grad()
         gen_imgs = self.generator(images, noise)
+
         loss_g = self.criterion(self.discriminator(gen_imgs), valid)
         self.manual_backward(loss_g)
         self.opt_g.step()
 
         # Log generated images
-        if batch_idx % 100 == 0:
+        if batch_idx % 400 == 0:
             with torch.no_grad():
                 img_grid = torchvision.utils.make_grid(gen_imgs, normalize=True)
                 self.logger.experiment.log(
@@ -101,7 +102,7 @@ gpus = 1 if torch.cuda.is_available() else 0
 # start training
 logger.info("Starting training...")
 torch.set_float32_matmul_precision("medium")  # or 'high' based on your precision needs
-trainer = pl.Trainer(max_epochs=10, accelerator="gpu", devices=1, logger=wandb_logger)
+trainer = pl.Trainer(max_epochs=10, accelerator="cpu", devices=1, logger=wandb_logger)
 gan = GAN()
 trainer.fit(gan)
 wandb.finish()

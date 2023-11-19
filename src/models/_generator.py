@@ -110,10 +110,15 @@ class Generator(nn.Module):
             # from merged and outputs the specified channel
             nn.LazyConv2d(out_channels=16, kernel_size=1, padding=0),
             CustomDecodeModule(in_channels=16),
+            nn.UpsamplingBilinear2d(scale_factor=2),
             CustomDecodeModule(in_channels=32),
+            nn.UpsamplingBilinear2d(scale_factor=2),
             CustomDecodeModule(in_channels=64),
+            nn.UpsamplingBilinear2d(scale_factor=2),
+            CustomDecodeModule(in_channels=128),
+            nn.UpsamplingBilinear2d(scale_factor=2),
             CustomLayer(
-                in_channels=128,
+                in_channels=256,
                 out_channels=3,
                 norm_layer=nn.InstanceNorm2d,
                 activation_function=nn.Identity,
