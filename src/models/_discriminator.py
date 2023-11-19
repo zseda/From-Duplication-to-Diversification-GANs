@@ -12,5 +12,5 @@ class Discriminator(nn.Module):
         )
 
     def forward(self, x):
-        x = self.base_model(x)[0]
+        x = self.base_model(x)
         return x
