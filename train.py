@@ -4,6 +4,7 @@ import pytorch_lightning as pl
 import wandb
 from loguru import logger
 from pytorch_lightning.loggers import WandbLogger
+from datetime import datetime
 from src.models import Generator, Discriminator
 from src.data import get_cifar10_dataloader
 
@@ -86,9 +87,13 @@ class GAN(pl.LightningModule):
         return get_cifar10_dataloader(batch_size=64, num_workers=2)[0]
 
 
+current_time = datetime.now()
+session_name = current_time.strftime("%Y-%m-%d_%H-%M-%S")
 # Weights & Biases setup for online-only logging
 wandb.init(
-    project="GAN-CIFAR10", name="GAN-run", settings=wandb.Settings(mode="online")
+    project="GAN-CIFAR10",
+    name="Basic-GAN-train-" + session_name,
+    settings=wandb.Settings(mode="online"),
 )
 
 wandb_logger = WandbLogger()
