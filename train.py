@@ -30,7 +30,7 @@ class GAN(pl.LightningModule):
         images, _ = batch
         images = images.to(self.device)
         batch_size = images.size(0)
-        noise = torch.rand(size=(2, 56, 2, 2)).to(self.device)
+        noise = torch.rand(size=(batch_size, 56, 2, 2)).to(self.device)
 
         # Move the valid and fake tensors to the same device as the model
         valid = torch.ones(batch_size, 1).to(self.device)
