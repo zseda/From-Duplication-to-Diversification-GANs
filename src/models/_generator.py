@@ -138,5 +138,6 @@ class Generator(nn.Module):
 
         # compute output image
         output_img = self.generative(merged)
+        sigmoid_output_img = torch.sigmoid(output_img)
 
-        return output_img
+        return sigmoid_output_img
