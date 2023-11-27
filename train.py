@@ -9,11 +9,37 @@ from src.models import Generator, Discriminator
 from src.data import get_cifar10_dataloader
 
 
+# TODO: try different weight init methods
+def init_weights(m):
+    if isinstance(m, (torch.nn.Conv2d, torch.nn.ConvTranspose2d, torch.nn.Linear)):
+        torch.nn.init.xavier_uniform_(m.weight)
+        torch.nn.init.constant_(m.bias, 0.0)
+    elif isinstance(m, torch.nn.BatchNorm2d):
+        torch.nn.init.normal_(m.weight)
+        torch.nn.init.constant_(m.bias, 0.0)
+
+
 class GAN(pl.LightningModule):
     def __init__(self):
         super(GAN, self).__init__()
+
+        # create generator
         self.generator = Generator(self.device).to(self.device)
+        # generator dummy call => init lazy layers
+        dummy_noise = torch.rand(size=(2, 56, 2, 2)).to(self.device)
+        dummy_images = torch.rand(size=(2, 3, 32, 32)).to(self.device)
+        self.generator(dummy_images, dummy_noise)
+        # initialize weights
+        for layer in self.generator.generative.modules():
+            layer.apply(init_weights)
+
+        # create discriminator
         self.discriminator = Discriminator().to(self.device)
+
+        # exponential moving average losses for G and D
+        self.g_ema = 0
+        self.d_ema = 0
+        self.d_ema_g_ema_diff = 0
 
         self.criterion = torch.nn.BCELoss()
         self.sample_val_images = None
@@ -33,35 +59,78 @@ class GAN(pl.LightningModule):
         noise = torch.rand(size=(batch_size, 56, 2, 2)).to(self.device)
 
         # Move the valid and fake tensors to the same device as the model
-        valid = torch.ones(batch_size, 1).to(self.device)
-        fake = torch.zeros(batch_size, 1).to(self.device)
+        # valid = torch.ones(batch_size, 1).to(self.device)
+        # fake = torch.zeros(batch_size, 1).to(self.device)
+
+        # soft labels
+        # TODO: try out more or less randomness
+        valid = torch.rand((batch_size, 1), device=self.device) * 0.1 + 0.9
+        fake = torch.rand((batch_size, 1), device=self.device) * 0.1
 
         # Discriminator update
+        self.opt_g.zero_grad()
         self.opt_d.zero_grad()
         real_loss = self.criterion(self.discriminator(images), valid)
         fake_loss = self.criterion(
             self.discriminator(self.generator(images, noise)), fake
         )
         loss_d = (real_loss + fake_loss) / 2
-        self.manual_backward(loss_d)
-        self.opt_d.step()
+        if self.d_ema_g_ema_diff > -0.4:
+            self.manual_backward(loss_d)
+            self.opt_d.step()
+
+        # Update exponential moving average loss for D
+        self.d_ema = self.d_ema * 0.9 + loss_d.detach().item() * 0.1
 
         # Generator update
         self.opt_g.zero_grad()
+        self.opt_d.zero_grad()
         gen_imgs = self.generator(images, noise)
 
+        # TODO: try out no soft-labels for generator (only for discriminator)
         loss_g = self.criterion(self.discriminator(gen_imgs), valid)
-        self.manual_backward(loss_g)
-        self.opt_g.step()
+        if self.d_ema_g_ema_diff < 0.4:
+            self.manual_backward(loss_g)
+            self.opt_g.step()
+
+        # Update exponential moving average loss for G
+        self.g_ema = self.g_ema * 0.9 + loss_g.detach().item() * 0.1
+
+        self.d_ema_g_ema_diff = self.d_ema - (self.g_ema / 2)
+
+        if batch_idx % 50 == 0:
+            with torch.no_grad():
+                # log losses
+                self.logger.experiment.log(
+                    {
+                        "losses/d_fake": fake_loss,
+                        "losses/d_real": real_loss,
+                        "losses/d_ema-g_ema": self.d_ema_g_ema_diff,
+                        "losses/d_ema": self.d_ema,
+                        "losses/g_ema": self.g_ema,
+                        "losses/d": loss_d,
+                        "losses/g": loss_g,
+                    }
+                )
 
         # Log generated images
-        if batch_idx % 400 == 0:
+        if batch_idx % 250 == 0:
             with torch.no_grad():
+                # Log generated images
                 img_grid = torchvision.utils.make_grid(gen_imgs, normalize=True)
                 self.logger.experiment.log(
                     {
-                        "generated_images": [
+                        "images/generated": [
                             wandb.Image(img_grid, caption="Generated Images")
+                        ]
+                    }
+                )
+                # Log real images
+                img_grid_real = torchvision.utils.make_grid(images, normalize=True)
+                self.logger.experiment.log(
+                    {
+                        "images/real": [
+                            wandb.Image(img_grid_real, caption="Generated Images")
                         ]
                     }
                 )
@@ -73,8 +142,9 @@ class GAN(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer_g = torch.optim.Adam(
-            self.generator.parameters(), lr=0.0002, betas=(0.5, 0.999)
+            self.generator.get_generative_parameters(), lr=0.0002, betas=(0.5, 0.999)
         )
+        # TODO: try out different learning rates for discriminator
         optimizer_d = torch.optim.Adam(
             self.discriminator.parameters(), lr=0.0002, betas=(0.5, 0.999)
         )
@@ -85,7 +155,7 @@ class GAN(pl.LightningModule):
 
     def train_dataloader(self):
         logger.info("Loading training data...")
-        return get_cifar10_dataloader(batch_size=64, num_workers=2)[0]
+        return get_cifar10_dataloader(batch_size=128, num_workers=8)[0]
 
 
 current_time = datetime.now()
