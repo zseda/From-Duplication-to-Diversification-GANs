@@ -103,11 +103,13 @@ class DCGAN(pl.LightningModule):
 
 def main(epochs: int = 100, g_input_dim: int = 100, lr: float = 1e-4):
     wandb_logger = WandbLogger(project="dcgan")
+
     model = DCGAN(g_input_dim=g_input_dim, lr=lr)
+    gpus = 1 if torch.cuda.is_available() else 0
     trainer = pl.Trainer(
         max_epochs=epochs,
         logger=wandb_logger,
-        gpus=1 if torch.cuda.is_available() else 0,
+        accelerator="gpu",
     )
     trainer.fit(model)
 
