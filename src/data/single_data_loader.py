@@ -23,7 +23,7 @@ class CIFAR10SingleClass(Dataset):
         return self.cifar10_dataset[self.indices[idx]]
 
 
-def get_cifar10_dataloader(
+def get_single_cifar10_dataloader(
     target_class, batch_size=64, num_workers=2, download_path="./data"
 ):
     """
