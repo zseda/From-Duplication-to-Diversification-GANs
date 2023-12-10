@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 import wandb
 from src.data import get_cifar10_dataloader as get_dataloader
-from src.models import DCGenerator, DCDiscriminator
+from models import DCGenerator, DCDiscriminator
 import timm
 from torchvision.utils import make_grid
 import uuid
@@ -29,10 +29,14 @@ class GAN(pl.LightningModule):
 
         # Loss Functions
         self.criterion_classification = nn.CrossEntropyLoss()
-        self.criterion = nn.BCELoss()from ._discriminator import Discriminator
-from ._generator import Generator
-from .model_dcgan import DCGenerator, DCDiscriminator
+        self.criterion = nn.BCELoss()
 
+    def forward(self, z, labels_onehot):
+        return self.G(z, labels_onehot)
+
+    def training_step(self, batch, batch_idx, optimizer_idx):
+        img, labels_real = batch
+        img = img.to(self.device)
         labels_real = labels_real.to(self.device)
         labels_real_onehot = (
             F.one_hot(labels_real, num_classes=10).float().to(self.device)
