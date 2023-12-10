@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 import wandb
 from src.data import get_cifar10_dataloader as get_dataloader
-from models import DCGenerator, DCDiscriminator
+from src.models import DCGenerator, DCDiscriminator
 import timm
 from torchvision.utils import make_grid
 import uuid
