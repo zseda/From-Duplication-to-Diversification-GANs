@@ -155,7 +155,7 @@ class GAN(pl.LightningModule):
 
     def train_dataloader(self):
         logger.info("Loading training data...")
-        return get_cifar10_dataloader(batch_size=128, num_workers=8)[0]
+        return get_cifar10_dataloader(target_class=4, batch_size=128, num_workers=8)[0]
 
 
 current_time = datetime.now()
