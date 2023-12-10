@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 import wandb
 from src.data import get_cifar10_dataloader as get_dataloader
-from models.model_dcgan import Discriminator, Generator
+from models import DCGenerator, DCDiscriminator
 import timm
 from torchvision.utils import make_grid
 import uuid
@@ -24,8 +24,8 @@ class GAN(pl.LightningModule):
         self.C = timm.create_model(
             "efficientnet_b0", pretrained=True, num_classes=10, in_chans=1
         )
-        self.G = Generator(g_input_dim=z_dim)
-        self.D = Discriminator()
+        self.G = DCGenerator(g_input_dim=z_dim)
+        self.D = DCDiscriminator()
 
         # Loss Functions
         self.criterion_classification = nn.CrossEntropyLoss()
