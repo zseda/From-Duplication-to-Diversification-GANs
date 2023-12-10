@@ -25,7 +25,18 @@ class GAN(pl.LightningModule):
             "efficientnet_b0", pretrained=True, num_classes=10, in_chans=1
         )
         self.G = DCGenerator(g_input_dim=z_dim)
-        self.D = DCDiscriminator()
+        # config D - weight norm
+        D_weight_norm = nn.utils.spectral_norm
+
+        # config D - norm
+        D_norm = nn.Identity
+
+        # config D - activation
+        D_activation = nn.LeakyReLU
+
+        self.D = DCDiscriminator(
+            norm=D_norm, weight_norm=D_weight_norm, activation=D_activation
+        )
 
         # Loss Functions
         self.criterion_classification = nn.CrossEntropyLoss()
