@@ -89,9 +89,8 @@ class GAN(pl.LightningModule):
 
         # TODO: try out no soft-labels for generator (only for discriminator)
         loss_g_div = self.criterion(self.discriminator(gen_imgs), valid)
-        loss_g_id = torch.mean(
-            (self.generator(images, torch.zeros_like(noise)) - images) ** 2
-        )
+        gen_images_id = self.generator(images, torch.zeros_like(noise))
+        loss_g_id = torch.mean((gen_images_id - images) ** 2)
         loss_g = loss_g_div + loss_g_id * 2
         if self.d_ema_g_ema_diff < 0.15:
             self.manual_backward(loss_g)
@@ -124,11 +123,17 @@ class GAN(pl.LightningModule):
             with torch.no_grad():
                 # Log generated images
                 img_grid = torchvision.utils.make_grid(gen_imgs, normalize=True)
+                img_grid_id = torchvision.utils.make_grid(gen_images_id, normalize=True)
                 self.logger.experiment.log(
                     {
                         "images/generated": [
                             wandb.Image(img_grid, caption="Generated Images")
-                        ]
+                        ],
+                        "images/generated_id": [
+                            wandb.Image(
+                                img_grid_id, caption="Generated Identity Images"
+                            )
+                        ],
                     }
                 )
                 # Log real images
