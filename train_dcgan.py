@@ -192,7 +192,7 @@ def main(
     # Trainer
     gpus = 1 if torch.cuda.is_available() else 0
     trainer = pl.Trainer(
-        max_epochs=500, accelerator="cpu", devices=1, logger=wandb_logger
+        max_epochs=500, accelerator="gpu", devices=1, logger=wandb_logger
     )
     trainer.fit(model)
 
