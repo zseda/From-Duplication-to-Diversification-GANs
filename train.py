@@ -7,6 +7,7 @@ from pytorch_lightning.loggers import WandbLogger
 from datetime import datetime
 from src.models import Generator, Discriminator
 from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
+from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
 
 
 # TODO: try different weight init methods
@@ -42,6 +43,7 @@ class GAN(pl.LightningModule):
         self.d_ema_g_ema_diff = 0
 
         self.criterion = torch.nn.BCELoss()
+        self.ssim = SSIM(data_range=1.0, size_average=True, channel=3)
         self.sample_val_images = None
 
         self.automatic_optimization = False
@@ -90,7 +92,7 @@ class GAN(pl.LightningModule):
         # TODO: try out no soft-labels for generator (only for discriminator)
         loss_g_div = self.criterion(self.discriminator(gen_imgs), valid)
         gen_images_id = self.generator(images, torch.zeros_like(noise))
-        loss_g_id_ssim = 0
+        loss_g_id_ssim = 1 - self.ssim(gen_images_id, images)
         loss_g_id_mse = torch.mean((gen_images_id - images) ** 2) * 2
         loss_g_id = loss_g_id_ssim + loss_g_id_mse
         loss_g = loss_g_div + loss_g_id
@@ -115,6 +117,8 @@ class GAN(pl.LightningModule):
                         "losses/g_ema": self.g_ema,
                         "losses/d": loss_d,
                         "losses/g_div": loss_g_div,
+                        "losses/g_id_ssim": loss_g_id_ssim,
+                        "losses/g_id_mse": loss_g_id_mse,
                         "losses/g_id": loss_g_id,
                         "losses/g": loss_g,
                     }
