@@ -88,13 +88,17 @@ class GAN(pl.LightningModule):
         gen_imgs = self.generator(images, noise)
 
         # TODO: try out no soft-labels for generator (only for discriminator)
-        loss_g = self.criterion(self.discriminator(gen_imgs), valid)
+        loss_g_div = self.criterion(self.discriminator(gen_imgs), valid)
+        loss_g_id = torch.mean(
+            (self.generator(images, torch.zeros_like(noise)) - images) ** 2
+        )
+        loss_g = loss_g_div + loss_g_id * 2
         if self.d_ema_g_ema_diff < 0.15:
             self.manual_backward(loss_g)
             self.opt_g.step()
 
         # Update exponential moving average loss for G
-        self.g_ema = self.g_ema * 0.9 + loss_g.detach().item() * 0.1
+        self.g_ema = self.g_ema * 0.9 + loss_g_div.detach().item() * 0.1
 
         self.d_ema_g_ema_diff = self.d_ema - (self.g_ema / 2)
 
@@ -109,6 +113,8 @@ class GAN(pl.LightningModule):
                         "losses/d_ema": self.d_ema,
                         "losses/g_ema": self.g_ema,
                         "losses/d": loss_d,
+                        "losses/g_div": loss_g_div,
+                        "losses/g_id": loss_g_id,
                         "losses/g": loss_g,
                     }
                 )
