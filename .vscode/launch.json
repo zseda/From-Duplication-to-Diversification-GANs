@@ -4,6 +4,7 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "Test Generator",
             "type": "python",
@@ -17,6 +18,14 @@
             "type": "python",
             "request": "launch",
             "program": "train.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Debug dcgan_train",
+            "type": "python",
+            "request": "launch",
+            "program": "train_dcgan.py",
             "console": "integratedTerminal",
             "justMyCode": true
         }
