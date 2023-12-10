@@ -66,19 +66,24 @@ class DCGAN(pl.LightningModule):
 
             # Log images and losses using WandB
             if batch_idx % 50 == 0:
+                img_grid = torchvision.utils.make_grid(fake_imgs, normalize=True)
                 self.logger.experiment.log(
                     {
-                        "real_images": [
-                            wandb.Image(make_grid(real_imgs[:32], normalize=True))
+                        "images/generated": [
+                            wandb.Image(img_grid, caption="Generated Images")
                         ],
-                        "fake_images": [
-                            wandb.Image(make_grid(fake_imgs[:32], normalize=True))
-                        ],
-                        "global_step": self.global_step,
                     }
                 )
+            # Log real images
+            img_grid_real = torchvision.utils.make_grid(real_imgs, normalize=True)
+            self.logger.experiment.log(
+                {"images/real": [wandb.Image(img_grid_real, caption="Real Images")]}
+            )
 
-            return d_loss
+            return {
+                "loss": g_loss,
+                "log": {"loss_generator": g_loss},
+            }
 
     def configure_optimizers(self):
         opt_g = torch.optim.Adam(
