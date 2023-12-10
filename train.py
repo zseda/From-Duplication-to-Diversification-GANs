@@ -90,8 +90,10 @@ class GAN(pl.LightningModule):
         # TODO: try out no soft-labels for generator (only for discriminator)
         loss_g_div = self.criterion(self.discriminator(gen_imgs), valid)
         gen_images_id = self.generator(images, torch.zeros_like(noise))
-        loss_g_id = torch.mean((gen_images_id - images) ** 2)
-        loss_g = loss_g_div + loss_g_id * 2
+        loss_g_id_ssim = 0
+        loss_g_id_mse = torch.mean((gen_images_id - images) ** 2) * 2
+        loss_g_id = loss_g_id_ssim + loss_g_id_mse
+        loss_g = loss_g_div + loss_g_id
         if self.d_ema_g_ema_diff < 0.15:
             self.manual_backward(loss_g)
             self.opt_g.step()
