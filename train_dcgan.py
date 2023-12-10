@@ -31,6 +31,7 @@ class DCGAN(pl.LightningModule):
         # Initialize weights
         self.generator.apply(weights_init_normal)
         self.discriminator.apply(weights_init_normal)
+        self.automatic_optimization = False
 
     def forward(self, z, labels):
         return self.generator(z, labels)
