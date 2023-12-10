@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 import wandb
-from src.data.full_data_loader import get_cifar10_dataloader as get_dataloader
+from src.data import get_cifar10_dataloader as get_dataloader
 from models.model_dcgan import Discriminator, Generator
 import timm
 from torchvision.utils import make_grid

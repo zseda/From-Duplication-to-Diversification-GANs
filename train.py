@@ -6,7 +6,7 @@ from loguru import logger
 from pytorch_lightning.loggers import WandbLogger
 from datetime import datetime
 from src.models import Generator, Discriminator
-from src.data import get_cifar10_dataloader
+from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
 
 
 # TODO: try different weight init methods
