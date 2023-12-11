@@ -38,7 +38,6 @@ def main(
         settings=wandb.Settings(mode="online"),
     )
 
-    wandb_logger = WandbLogger()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"batch_size: {batch_size}")
     tb_path = Path(root_path, "logs", experiment_id)
