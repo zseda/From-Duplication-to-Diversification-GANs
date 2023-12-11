@@ -16,6 +16,7 @@ import wandb
 from pytorch_lightning.loggers import WandbLogger
 import datetime
 
+
 def main(
     root_path: str = typer.Option("."),
     epochs: int = typer.Option(100),
@@ -181,7 +182,7 @@ def main(
             # generate images via G
             # create labels for testing generator
             # convert to one hot encoding
-            z = Varwandb.finish()iable(torch.randn(actual_batch_size, z_dim).to(device))
+            z = Variable(torch.randn(actual_batch_size, z_dim).to(device))
 
             G_output, G_output_logits = G(z, labels_fake_onehot)
             D_out = D(G_output, labels_fake_onehot)
@@ -239,6 +240,7 @@ def main(
                     },
                     step=global_step,
                 )
+
             """
             -------------------------------
             test class generation per epoch
@@ -278,7 +280,6 @@ def main(
                 step=e,
             )
         wandb.finish()
-        
 
         """
             ------
