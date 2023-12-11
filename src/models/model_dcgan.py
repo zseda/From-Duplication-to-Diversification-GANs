@@ -7,23 +7,23 @@ from loguru import logger
 
 def weights_init_normal(m):
     classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
+    if classname.find("Conv") != -1:
         logger.debug(f"init conv weights '{classname}'")
         nn.init.xavier_normal_(m.weight)
         # nn.init.kaiming_uniform_(m.weight, mode="fan_out")
         # nn.init.kaiming_normal_(m.weight, mode="fan_out")
         nn.init.constant_(m.bias.data, 0.0)
-    elif classname.find('Linear') != -1:
+    elif classname.find("Linear") != -1:
         logger.debug(f"init linear weights '{classname}'")
         nn.init.xavier_normal_(m.weight)
         # nn.init.kaiming_uniform_(m.weight, mode="fan_out")
         # nn.init.kaiming_normal_(m.weight, mode="fan_out")
         nn.init.constant_(m.bias.data, 0.0)
-    elif classname.find('BatchNorm2d') != -1:
+    elif classname.find("BatchNorm2d") != -1:
         logger.debug(f"init batchnorm 2d weights '{classname}'")
         nn.init.constant_(m.weight, 1.0)
         nn.init.constant_(m.bias.data, 0.0)
-    elif classname.find('BatchNorm1d') != -1:
+    elif classname.find("BatchNorm1d") != -1:
         logger.debug(f"init batchnorm 1d weights '{classname}'")
         nn.init.constant_(m.weight, 1.0)
         nn.init.constant_(m.bias.data, 0.0)
@@ -32,16 +32,31 @@ def weights_init_normal(m):
 class Block(nn.Module):
     def __init__(self, in_channels: int):
         super().__init__()
-        self.c1 = nn.Conv2d(in_channels=in_channels, out_channels=int(in_channels/2),
-                            kernel_size=3, stride=1, padding="same")
-        self.b1 = nn.BatchNorm2d(num_features=int(in_channels/2))
+        self.c1 = nn.Conv2d(
+            in_channels=in_channels,
+            out_channels=int(in_channels / 2),
+            kernel_size=3,
+            stride=1,
+            padding="same",
+        )
+        self.b1 = nn.BatchNorm2d(num_features=int(in_channels / 2))
 
-        self.c2 = nn.Conv2d(in_channels=int(in_channels/2), out_channels=int(in_channels/2),
-                            kernel_size=3, stride=1, padding="same")
-        self.b2 = nn.BatchNorm2d(num_features=int(in_channels/2))
+        self.c2 = nn.Conv2d(
+            in_channels=int(in_channels / 2),
+            out_channels=int(in_channels / 2),
+            kernel_size=3,
+            stride=1,
+            padding="same",
+        )
+        self.b2 = nn.BatchNorm2d(num_features=int(in_channels / 2))
 
-        self.c3 = nn.Conv2d(in_channels=int(in_channels/2), out_channels=in_channels,
-                            kernel_size=3, stride=1, padding="same")
+        self.c3 = nn.Conv2d(
+            in_channels=int(in_channels / 2),
+            out_channels=in_channels,
+            kernel_size=3,
+            stride=1,
+            padding="same",
+        )
         self.b3 = nn.BatchNorm2d(num_features=in_channels)
 
     def forward(self, x):
@@ -67,19 +82,19 @@ class Block(nn.Module):
 class Generator(nn.Module):
     def __init__(self, g_input_dim):
         super(Generator, self).__init__()
-        self.fc1 = nn.Linear(in_features=g_input_dim, out_features=7*7*32)
-        # self.fc1b = nn.BatchNorm1d(num_features=7*7*32)
-        self.fc2 = nn.Linear(in_features=10, out_features=7*7*32)
-        # self.fc2b = nn.BatchNorm1d(num_features=7*7*32)
-        self.fc3 = nn.Linear(in_features=7*7*64, out_features=7*7*32)
-        # self.fc3b = nn.BatchNorm1d(num_features=7*7*32)
+        # Adjust the output size of the first linear layer
+        self.fc1 = nn.Linear(in_features=g_input_dim, out_features=8 * 8 * 128)
+        self.fc2 = nn.Linear(in_features=10, out_features=8 * 8 * 128)
+        self.fc3 = nn.Linear(in_features=8 * 8 * 256, out_features=8 * 8 * 128)
 
-        self.block1 = Block(in_channels=32)
-        self.block2 = Block(in_channels=32)
-        self.block3 = Block(in_channels=32)
+        self.block1 = Block(in_channels=128)
+        self.block2 = Block(in_channels=128)
+        self.block3 = Block(in_channels=128)
 
-        self.c4 = nn.Conv2d(in_channels=32, out_channels=1,
-                            kernel_size=3, stride=1, padding="same")
+        # Adjust the output channels to 3 for RGB
+        self.c4 = nn.Conv2d(
+            in_channels=128, out_channels=3, kernel_size=3, stride=1, padding="same"
+        )
 
     def forward(self, x, label):
         # process random noise
@@ -96,7 +111,7 @@ class Generator(nn.Module):
         fc3 = F.leaky_relu(self.fc3(fc_concat))
 
         # transform to 2D space
-        x = fc3.view(-1, 32, 7, 7)
+        x = fc3.view(-1, 128, 8, 8)
 
         # apply convolutions and upsample
         x = self.block1(x)
@@ -120,51 +135,71 @@ class Generator(nn.Module):
 class Discriminator(nn.Module):
     def __init__(self, norm, weight_norm, activation):
         super(Discriminator, self).__init__()
-
+        # Adjust the input channels to 3 for RGB
         self.step1 = nn.Sequential(
-            weight_norm(nn.Conv2d(in_channels=1, out_channels=64,
-                                kernel_size=3, stride=2, padding=1)),
+            weight_norm(
+                nn.Conv2d(
+                    in_channels=3, out_channels=64, kernel_size=3, stride=2, padding=1
+                )
+            ),
             norm(num_features=64),
-            activation()
+            activation(),
         )
 
         self.step2 = nn.Sequential(
-            weight_norm(nn.Conv2d(in_channels=64, out_channels=128,
-                                kernel_size=3, stride=2, padding=1)),
+            weight_norm(
+                nn.Conv2d(
+                    in_channels=64, out_channels=128, kernel_size=3, stride=2, padding=1
+                )
+            ),
             norm(num_features=128),
-            activation()
+            activation(),
         )
 
         self.step3 = nn.Sequential(
-            weight_norm(nn.Conv2d(in_channels=128, out_channels=256,
-                                kernel_size=3, stride=1, padding=1)),
+            weight_norm(
+                nn.Conv2d(
+                    in_channels=128,
+                    out_channels=256,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1,
+                )
+            ),
             norm(num_features=256),
-            activation()
+            activation(),
         )
 
         self.step4 = nn.Sequential(
-            weight_norm(nn.Conv2d(in_channels=256, out_channels=128,
-                                kernel_size=3, stride=1, padding=1)),
+            weight_norm(
+                nn.Conv2d(
+                    in_channels=256,
+                    out_channels=128,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1,
+                )
+            ),
             norm(num_features=128),
-            activation()
+            activation(),
         )
 
         self.layer_label = nn.Sequential(
             weight_norm(nn.Linear(in_features=10, out_features=100)),
             norm(num_features=100),
-            activation()
+            activation(),
         )
 
-        self.fc_num_features = 128*7*7
+        self.fc_num_features = 128 * 7 * 7
         self.fc1 = nn.Sequential(
             weight_norm(nn.Linear(in_features=self.fc_num_features, out_features=100)),
             norm(num_features=100),
-            activation()
+            activation(),
         )
         self.fc2 = nn.Linear(in_features=200, out_features=1)
 
     def forward(self, x, label):
-    # def forward(self, x):
+        # def forward(self, x):
         """forward method
 
         Args:
@@ -191,7 +226,7 @@ class Discriminator(nn.Module):
 
         # concat image + label information
         x = torch.cat((x, label), dim=1)
-        
+
         # process both
         x = self.fc2(x)
         x = torch.sigmoid(x)

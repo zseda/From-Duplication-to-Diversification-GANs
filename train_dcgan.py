@@ -14,7 +14,7 @@ from torchvision.utils import make_grid
 import timm
 import wandb
 from pytorch_lightning.loggers import WandbLogger
-import datetime
+from datetime import datetime
 
 
 def main(
@@ -50,7 +50,7 @@ def main(
 
     # classifier
     C = timm.create_model(
-        "efficientnet_b0", pretrained=True, num_classes=10, in_chans=1
+        "efficientnet_b0", pretrained=True, num_classes=10, in_chans=3
     )
 
     C.to(device)
