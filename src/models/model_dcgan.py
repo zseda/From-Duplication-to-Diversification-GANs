@@ -92,22 +92,19 @@ class Generator(nn.Module):
         self.block3 = Block(in_channels=128)
 
         # Adjust the output channels to 3 for RGB
-        self.c4 = nn.Conv2d(
-            in_channels=128, out_channels=3, kernel_size=3, stride=1, padding="same"
+        self.final_conv = nn.Conv2d(
+            in_channels=128, out_channels=3, kernel_size=3, stride=1, padding=1
         )
 
     def forward(self, x, label):
         # process random noise
-        # fc1 = F.leaky_relu(self.fc1b(self.fc1(x)), 0.2)
         fc1 = F.leaky_relu(self.fc1(x), 0.2)
 
         # process class information
-        # fc2 = F.leaky_relu(self.fc2b(self.fc2(label)), 0.2)
         fc2 = F.leaky_relu(self.fc2(label), 0.2)
 
         # concat data
         fc_concat = torch.cat((fc1, fc2), dim=1)
-        # fc3 = F.leaky_relu(self.fc3b(self.fc3(fc_concat)))
         fc3 = F.leaky_relu(self.fc3(fc_concat))
 
         # transform to 2D space
@@ -115,15 +112,19 @@ class Generator(nn.Module):
 
         # apply convolutions and upsample
         x = self.block1(x)
-        x = F.upsample_bilinear(x, size=(14, 14))
+        x = F.interpolate(
+            x, scale_factor=2, mode="bilinear", align_corners=False
+        )  # Upsample to 16x16
 
         x = self.block2(x)
-        x = F.upsample_bilinear(x, size=(28, 28))
+        x = F.interpolate(
+            x, scale_factor=2, mode="bilinear", align_corners=False
+        )  # Upsample to 32x32
 
         x = self.block3(x)
 
-        # last layer
-        x = self.c4(x)
+        # final layer to adjust to RGB
+        x = self.final_conv(x)
 
         # last activation
         x_logits = x
@@ -135,7 +136,8 @@ class Generator(nn.Module):
 class Discriminator(nn.Module):
     def __init__(self, norm, weight_norm, activation):
         super(Discriminator, self).__init__()
-        # Adjust the input channels to 3 for RGB
+
+        # First convolutional layer
         self.step1 = nn.Sequential(
             weight_norm(
                 nn.Conv2d(
@@ -146,6 +148,7 @@ class Discriminator(nn.Module):
             activation(),
         )
 
+        # Second convolutional layer
         self.step2 = nn.Sequential(
             weight_norm(
                 nn.Conv2d(
@@ -156,13 +159,14 @@ class Discriminator(nn.Module):
             activation(),
         )
 
+        # Third convolutional layer
         self.step3 = nn.Sequential(
             weight_norm(
                 nn.Conv2d(
                     in_channels=128,
                     out_channels=256,
                     kernel_size=3,
-                    stride=1,
+                    stride=2,
                     padding=1,
                 )
             ),
@@ -170,64 +174,61 @@ class Discriminator(nn.Module):
             activation(),
         )
 
+        # Fourth convolutional layer
         self.step4 = nn.Sequential(
             weight_norm(
                 nn.Conv2d(
                     in_channels=256,
-                    out_channels=128,
+                    out_channels=512,
                     kernel_size=3,
-                    stride=1,
+                    stride=2,
                     padding=1,
                 )
             ),
-            norm(num_features=128),
+            norm(num_features=512),
             activation(),
         )
 
+        # Linear layer for label processing
         self.layer_label = nn.Sequential(
-            weight_norm(nn.Linear(in_features=10, out_features=100)),
-            norm(num_features=100),
+            weight_norm(nn.Linear(in_features=10, out_features=512)),
+            norm(num_features=512),
             activation(),
         )
 
-        self.fc_num_features = 128 * 7 * 7
+        # Calculate the size of the flattened feature maps
+        self.fc_num_features = 512 * 2 * 2  # Assuming the final feature map size is 2x2
+
+        # Fully connected layers
         self.fc1 = nn.Sequential(
-            weight_norm(nn.Linear(in_features=self.fc_num_features, out_features=100)),
-            norm(num_features=100),
+            weight_norm(nn.Linear(in_features=self.fc_num_features, out_features=512)),
+            norm(num_features=512),
             activation(),
         )
-        self.fc2 = nn.Linear(in_features=200, out_features=1)
+
+        self.fc2 = nn.Linear(
+            in_features=1024, out_features=1
+        )  # 512 for image features + 512 for label features
 
     def forward(self, x, label):
-        # def forward(self, x):
-        """forward method
-
-        Args:
-            x: image
-            y: label
-
-        Returns:
-            float: prediction in interval [0, 1]
-        """
         x = self.step1(x)
         x = self.step2(x)
         x = self.step3(x)
         x = self.step4(x)
 
-        # change shape for fc layers
+        # Flatten the output for the fully connected layer
         x = x.view(-1, self.fc_num_features)
-        # x => [N, 128*7*7]
 
-        # process image information
+        # Process image information
         x = self.fc1(x)
 
-        # process label information
+        # Process label information
         label = self.layer_label(label)
 
-        # concat image + label information
+        # Concatenate image and label information
         x = torch.cat((x, label), dim=1)
 
-        # process both
+        # Final layer
         x = self.fc2(x)
         x = torch.sigmoid(x)
 

@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 from src.models import DCGenerator, DCDiscriminator
+import torch.nn as nn
 
 
 def main():
@@ -12,9 +13,19 @@ def main():
 
     # Initialize Generator and Discriminator
     G = DCGenerator(z_dim).to(device)
-    D = DCDiscriminator().to(
-        device
-    )  # Adjust based on your actual Discriminator's initialization
+    # config D - weight norm
+    D_weight_norm = nn.utils.spectral_norm
+
+    # config D - norm
+    D_norm = nn.Identity
+
+    # config D - activation
+    D_activation = nn.LeakyReLU
+
+    # initialize D
+    D = DCDiscriminator(
+        norm=D_norm, weight_norm=D_weight_norm, activation=D_activation
+    ).to(device)
 
     G.eval()  # Set the generator to evaluation mode
     D.eval()  # Set the discriminator to evaluation mode
@@ -30,10 +41,11 @@ def main():
 
     # Generate fake images
     gen_output = G(dummy_noise, labels_fake_onehot)[0]
+    print("Generator output shape:", gen_output.shape)
 
     # Test Discriminator on fake images
     disc_output_fake = D(gen_output, labels_fake_onehot)
-    print("Discriminator output for fake images:", disc_output_fake)
+    print("Discriminator output shape:", disc_output_fake.shape)
 
 
 if __name__ == "__main__":
