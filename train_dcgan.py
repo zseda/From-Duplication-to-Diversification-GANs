@@ -11,8 +11,8 @@ import uuid
 from src.data import get_cifar10_dataloader as get_dataloader
 from src.models import DCDiscriminator, DCGenerator, weights_init_normal
 from torchvision.utils import make_grid
-from torch.utils.tensorboard import SummaryWriter
 import timm
+import wandb
 
 
 def main(
@@ -31,13 +31,10 @@ def main(
     logger.info(f"batch_size: {batch_size}")
     tb_path = Path(root_path, "logs", experiment_id)
     tb_path.mkdir(parents=True, exist_ok=False)
-    tb_writer = SummaryWriter(log_dir=tb_path.as_posix())
     logger.info(f"experiment id: {experiment_id}")
 
     # load data
-    loader_train, loader_test, mnist_dim, _ = get_dataloader(
-        batch_size=batch_size, num_workers=num_workers, dataset_size=dataset_size
-    )
+    loader_train = get_dataloader(batch_size=batch_size, num_workers=num_workers)[0]
 
     # classifier
     C = timm.create_model(
@@ -203,67 +200,72 @@ def main(
 
             # print every 50 steps
             if global_step % 50 == 0:
-                tb_writer.add_scalar(
-                    "train/disciriminator_loss", D_loss.item(), global_step=global_step
+                wandb.log(
+                    {"train/disciriminator_loss": D_loss.item()}, step=global_step
                 )
-                tb_writer.flush()
-            D_losses.append(D_loss.data.item())
-            if global_step % 50 == 0:
-                # tb_writer.add_scalar(
-                # 'train/C_loss', C_loss.item(), global_step=global_step)
-                tb_writer.add_scalar(
-                    "train/G_loss", G_loss.item(), global_step=global_step
-                )
-                tb_writer.add_scalar(
-                    "train/G_disc_loss", G_disc_loss.item(), global_step=global_step
-                )
+                wandb.log({"train/G_loss": G_loss.item()}, step=global_step)
+                wandb.log({"train/G_disc_loss": G_disc_loss.item()}, step=global_step)
                 if e > start_c_after:
-                    tb_writer.add_scalar(
-                        "train/G_classification_loss",
-                        G_classification_loss.item(),
-                        global_step=global_step,
+                    wandb.log(
+                        {"train/G_classification_loss": G_classification_loss.item()},
+                        step=global_step,
                     )
-                tb_writer.flush()
+
+            D_losses.append(D_loss.data.item())
             G_losses.append(G_loss.data.item())
 
-            # print every 250 steps
+            # Log images every 250 steps
             if global_step % 250 == 0:
-                tb_writer.add_image(
-                    f"train/img", make_grid(plot_img), global_step=global_step
-                )
-                tb_writer.add_image(
-                    f"train/pred", make_grid(plot_output), global_step=global_step
-                )
+                # Normalize images
+                plot_img = (img + 1.0) / 2.0
+                plot_output = (G_output + 1.0) / 2.0
 
-        """
+                # Log images to WandB
+                wandb.log(
+                    {
+                        "train/img": [wandb.Image(plot_img, caption="Image")],
+                        "train/pred": [wandb.Image(plot_output, caption="Prediction")],
+                    },
+                    step=global_step,
+                )
+            """
             -------------------------------
             test class generation per epoch
             -------------------------------
         """
-        # make prediction - we do not need gradients for that
         with torch.no_grad():
-            # create random noise for G to generate images
+            # Create random noise for G to generate images
             z = torch.randn(80, z_dim).to(device)
-            # make prediction - use labels test => structured one-hot encoded labels
+            # Make prediction - use labels test => structured one-hot encoded labels
             G_test_output, G_test_output_logits = G(z, labels_test)
-            # normalize images => output of G is tanh so we need to normalize to [0.0, 1.0]
+            # Normalize images => output of G is tanh so we need to normalize to [0.0, 1.0]
             G_test_output = (G_test_output + 1.0) / 2.0
-            # save to TensorBoard
-            tb_writer.add_image(f"test/pred", make_grid(G_test_output), global_step=e)
-            # flush cache in case anything is hanging in cache
-            tb_writer.flush()
-
-            # make prediction of z_permanent - same random numbers for all epochs
-            # make prediction - use labels test => structured one-hot encoded labels
-            G_test_output_perm, G_test_output_logits = G(z_permanent, labels_test)
-            # normalize images => output of G is tanh so we need to normalize to [0.0, 1.0]
-            G_test_output_perm = (G_test_output_perm + 1.0) / 2.0
-            # save to TensorBoard
-            tb_writer.add_image(
-                f"test/pred_perm", make_grid(G_test_output_perm), global_step=e
+            # Save to WandB
+            wandb.log(
+                {
+                    "test/pred": [
+                        wandb.Image(make_grid(G_test_output), caption="Prediction")
+                    ]
+                },
+                step=e,
             )
-            # flush cache in case anything is hanging in cache
-            tb_writer.flush()
+
+            # Make prediction of z_permanent - same random numbers for all epochs
+            G_test_output_perm, G_test_output_logits = G(z_permanent, labels_test)
+            # Normalize images => output of G is tanh so we need to normalize to [0.0, 1.0]
+            G_test_output_perm = (G_test_output_perm + 1.0) / 2.0
+            # Save to WandB
+            wandb.log(
+                {
+                    "test/pred_perm": [
+                        wandb.Image(
+                            make_grid(G_test_output_perm),
+                            caption="Permanent Prediction",
+                        )
+                    ]
+                },
+                step=e,
+            )
 
         """
             ------
