@@ -1,118 +1,292 @@
 import typer
 import torch
 import torch.nn as nn
-import torchvision
 import torch.nn.functional as F
+import numpy as np
+import torch.optim as optim
 from torch.autograd import Variable
-import pytorch_lightning as pl
-from pytorch_lightning.loggers import WandbLogger
-import wandb
-from src.data import get_cifar10_dataloader as get_dataloader
-from src.models import DCGenerator, DCDiscriminator, weights_init_normal
-import timm
-import uuid
 from loguru import logger
+from pathlib import Path
+import uuid
+from src.data import get_cifar10_dataloader as get_dataloader
+from src.models import DCDiscriminator, DCGenerator, weights_init_normal
+from torchvision.utils import make_grid
+from torch.utils.tensorboard import SummaryWriter
+import timm
 
 
-class DCGAN(pl.LightningModule):
-    def __init__(self, g_input_dim=100, lr=1e-4):
-        super().__init__()
-        self.save_hyperparameters()
-        self.generator = DCGenerator(g_input_dim=g_input_dim)
-        self.discriminator = DCDiscriminator(
-            norm=nn.Identity,
-            weight_norm=nn.utils.spectral_norm,
-            activation=nn.LeakyReLU,
-        )
-        self.criterion = nn.BCELoss()
-        self.g_input_dim = g_input_dim
-        self.lr = lr
+def main(
+    root_path: str = typer.Option("."),
+    epochs: int = typer.Option(100),
+    batch_size: int = typer.Option(100),
+    lr: float = typer.Option(1e-4),
+    z_dim: int = typer.Option(100),
+    start_c_after: int = typer.Option(15),
+    num_workers: int = typer.Option(16),
+    experiment_id: str = typer.Option(f"debug-{uuid.uuid4()}"),
+    # %80=48.000 %60=36.000 %40 =24.000 %20 = 12.000
+    dataset_size: int = typer.Option(48000),
+):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logger.info(f"batch_size: {batch_size}")
+    tb_path = Path(root_path, "logs", experiment_id)
+    tb_path.mkdir(parents=True, exist_ok=False)
+    tb_writer = SummaryWriter(log_dir=tb_path.as_posix())
+    logger.info(f"experiment id: {experiment_id}")
 
-        # Initialize weights
-        self.generator.apply(weights_init_normal)
-        self.discriminator.apply(weights_init_normal)
-        self.automatic_optimization = False
-
-    def forward(self, z, labels):
-        return self.generator(z, labels)
-
-    def training_step(self, batch, batch_idx, optimizer_idx):
-        real_imgs, labels = batch
-
-        # Train Generator
-        if optimizer_idx == 0:
-            z = torch.randn(
-                real_imgs.shape[0], self.g_input_dim, 1, 1, device=self.device
-            )
-            fake_imgs, _ = self(z, labels)
-            fake_validity = self.discriminator(fake_imgs, labels)
-            g_loss = self.criterion(fake_validity, torch.ones_like(fake_validity))
-            self.log("loss/generator", g_loss)
-            return g_loss
-
-        # Train Discriminator
-        if optimizer_idx == 1:
-            fake_imgs, _ = self(
-                torch.randn(
-                    real_imgs.shape[0], self.g_input_dim, 1, 1, device=self.device
-                ),
-                labels,
-            ).detach()
-            real_validity = self.discriminator(real_imgs, labels)
-            fake_validity = self.discriminator(fake_imgs, labels)
-            real_loss = self.criterion(real_validity, torch.ones_like(real_validity))
-            fake_loss = self.criterion(fake_validity, torch.zeros_like(fake_validity))
-            d_loss = (real_loss + fake_loss) / 2
-            self.log("loss/discriminator", d_loss)
-
-            # Log images and losses using WandB
-            if batch_idx % 50 == 0:
-                img_grid = torchvision.utils.make_grid(fake_imgs, normalize=True)
-                self.logger.experiment.log(
-                    {
-                        "images/generated": [
-                            wandb.Image(img_grid, caption="Generated Images")
-                        ],
-                    }
-                )
-            # Log real images
-            img_grid_real = torchvision.utils.make_grid(real_imgs, normalize=True)
-            self.logger.experiment.log(
-                {"images/real": [wandb.Image(img_grid_real, caption="Real Images")]}
-            )
-
-            return {
-                "loss": g_loss,
-                "log": {"loss_generator": g_loss},
-            }
-
-    def configure_optimizers(self):
-        opt_g = torch.optim.Adam(
-            self.generator.parameters(), lr=self.lr, betas=(0.5, 0.999)
-        )
-        opt_d = torch.optim.Adam(
-            self.discriminator.parameters(), lr=self.lr, betas=(0.5, 0.999)
-        )
-        return [opt_g, opt_d], []
-
-    def train_dataloader(self):
-        # Load your data here using the get_dataloader function
-        return get_dataloader(
-            batch_size=64, num_workers=4, dataset_size=48000
-        )  # Replace with actual parameters
-
-
-def main(epochs: int = 100, g_input_dim: int = 100, lr: float = 1e-4):
-    wandb_logger = WandbLogger(project="dcgan")
-
-    model = DCGAN(g_input_dim=g_input_dim, lr=lr)
-    gpus = 1 if torch.cuda.is_available() else 0
-    trainer = pl.Trainer(
-        max_epochs=epochs,
-        logger=wandb_logger,
-        accelerator="gpu",
+    # load data
+    loader_train, loader_test, mnist_dim, _ = get_dataloader(
+        batch_size=batch_size, num_workers=num_workers, dataset_size=dataset_size
     )
-    trainer.fit(model)
+
+    # classifier
+    C = timm.create_model(
+        "efficientnet_b0", pretrained=True, num_classes=10, in_chans=1
+    )
+
+    C.to(device)
+
+    # initialize G
+    G = DCGenerator(g_input_dim=z_dim)
+
+    G.to(device)
+    G.apply(weights_init_normal)
+
+    # config D - weight norm
+    D_weight_norm = nn.utils.spectral_norm
+
+    # config D - norm
+    D_norm = nn.Identity
+
+    # config D - activation
+    D_activation = nn.LeakyReLU
+
+    # initialize D
+    D = DCDiscriminator(norm=D_norm, weight_norm=D_weight_norm, activation=D_activation)
+
+    D.to(device)
+    D.apply(weights_init_normal)
+
+    # optimizer
+    C_optimizer = optim.Adam(C.parameters(), lr=lr, betas=(0.5, 0.999))
+    G_optimizer = optim.Adam(G.parameters(), lr=lr, betas=(0.5, 0.999))
+    D_optimizer = optim.Adam(D.parameters(), lr=lr, betas=(0.5, 0.999))
+
+    # loss
+    criterion_classification = nn.CrossEntropyLoss()
+    criterion = nn.BCELoss()
+    global_step = 0
+    D_losses, G_losses = [], []
+
+    # test labels
+    labels_test = list()
+    eye10 = torch.eye(10)
+    for i in range(10):
+        labels_test.append(eye10[i].repeat(8).view(8, 10))
+    labels_test = torch.stack(labels_test).view(-1, 10).float().to(device)
+
+    # persistent z for testing
+    torch.manual_seed(42)
+    z_permanent = torch.randn(80, z_dim).to(device)
+
+    for e in range(1, epochs + 1):
+        logger.info(f"training epoch {e}/{epochs}")
+        for batch in loader_train:
+            """
+            -----------
+            preparation
+            -----------
+            """
+            # for logging
+            global_step += 1
+
+            # decompose batch data
+            img, labels_real = batch
+            img = img.to(device)
+            labels_real = labels_real.to(device)
+            labels_real_onehot = (
+                F.one_hot(labels_real, num_classes=10).float().to(device)
+            )
+
+            actual_batch_size = img.shape[0]
+
+            # reset gradients
+            D.zero_grad()
+            G.zero_grad()
+            C.zero_grad()
+
+            # create labels
+            y_real = Variable(torch.ones(actual_batch_size, 1).to(device))
+            y_fake = Variable(torch.zeros(actual_batch_size, 1).to(device))
+
+            # generate random noise for G
+            z = Variable(torch.randn(actual_batch_size, z_dim).to(device))
+
+            # create class labels for generator - uniform distribution
+            labels_fake = torch.randint(low=0, high=9, size=(actual_batch_size,))
+
+            # one-hot encode class labels
+            labels_fake_onehot = (
+                F.one_hot(labels_fake, num_classes=10).float().to(device)
+            )
+
+            # generate images for D
+            x_fake, x_fake_logits = G(z, labels_fake_onehot)
+
+            """
+                -------
+                train C
+                -------
+            """
+            C_out = C(img)
+            C_loss = criterion_classification(C_out, labels_real_onehot)
+            C_loss.backward()
+            C_optimizer.step()
+
+            """ 
+                -------
+                train D
+                -------
+            """
+            # D_out_real = D(img, labels_real_onehot)
+            D_out_real = D(img, labels_real_onehot)
+            D_real_loss = criterion(D_out_real, y_real)
+
+            D_out_fake = D(x_fake, labels_fake_onehot)
+            D_fake_loss = criterion(D_out_fake, y_fake)
+
+            # gradient backprop & optimize ONLY D's parameters
+            D_loss = (D_real_loss + D_fake_loss) / 2.0
+            D_loss.backward()
+            D_optimizer.step()
+
+            """ 
+                -------
+                train G
+                -------
+            """
+            # reset gradients
+            D.zero_grad()
+            G.zero_grad()
+            C.zero_grad()
+
+            # generate images via G
+            # create labels for testing generator
+            # convert to one hot encoding
+            z = Variable(torch.randn(actual_batch_size, z_dim).to(device))
+
+            G_output, G_output_logits = G(z, labels_fake_onehot)
+            D_out = D(G_output, labels_fake_onehot)
+            G_disc_loss = criterion(D_out, y_real)
+
+            # test generated images with classifier
+            if e > start_c_after:
+                C_out = C(G_output)
+                G_classification_loss = criterion_classification(
+                    C_out, labels_fake_onehot
+                )
+                G_loss = G_disc_loss + 0.3 * G_classification_loss
+            else:
+                G_loss = G_disc_loss
+
+            # gradient backprop & optimize ONLY G's parameters
+            G_loss.backward()
+            G_optimizer.step()
+
+            """
+                -------
+                logging
+                -------
+            """
+            plot_img = (img + 1.0) / 2.0
+            plot_output = (G_output + 1.0) / 2.0
+
+            # print every 50 steps
+            if global_step % 50 == 0:
+                tb_writer.add_scalar(
+                    "train/disciriminator_loss", D_loss.item(), global_step=global_step
+                )
+                tb_writer.flush()
+            D_losses.append(D_loss.data.item())
+            if global_step % 50 == 0:
+                # tb_writer.add_scalar(
+                # 'train/C_loss', C_loss.item(), global_step=global_step)
+                tb_writer.add_scalar(
+                    "train/G_loss", G_loss.item(), global_step=global_step
+                )
+                tb_writer.add_scalar(
+                    "train/G_disc_loss", G_disc_loss.item(), global_step=global_step
+                )
+                if e > start_c_after:
+                    tb_writer.add_scalar(
+                        "train/G_classification_loss",
+                        G_classification_loss.item(),
+                        global_step=global_step,
+                    )
+                tb_writer.flush()
+            G_losses.append(G_loss.data.item())
+
+            # print every 250 steps
+            if global_step % 250 == 0:
+                tb_writer.add_image(
+                    f"train/img", make_grid(plot_img), global_step=global_step
+                )
+                tb_writer.add_image(
+                    f"train/pred", make_grid(plot_output), global_step=global_step
+                )
+
+        """
+            -------------------------------
+            test class generation per epoch
+            -------------------------------
+        """
+        # make prediction - we do not need gradients for that
+        with torch.no_grad():
+            # create random noise for G to generate images
+            z = torch.randn(80, z_dim).to(device)
+            # make prediction - use labels test => structured one-hot encoded labels
+            G_test_output, G_test_output_logits = G(z, labels_test)
+            # normalize images => output of G is tanh so we need to normalize to [0.0, 1.0]
+            G_test_output = (G_test_output + 1.0) / 2.0
+            # save to TensorBoard
+            tb_writer.add_image(f"test/pred", make_grid(G_test_output), global_step=e)
+            # flush cache in case anything is hanging in cache
+            tb_writer.flush()
+
+            # make prediction of z_permanent - same random numbers for all epochs
+            # make prediction - use labels test => structured one-hot encoded labels
+            G_test_output_perm, G_test_output_logits = G(z_permanent, labels_test)
+            # normalize images => output of G is tanh so we need to normalize to [0.0, 1.0]
+            G_test_output_perm = (G_test_output_perm + 1.0) / 2.0
+            # save to TensorBoard
+            tb_writer.add_image(
+                f"test/pred_perm", make_grid(G_test_output_perm), global_step=e
+            )
+            # flush cache in case anything is hanging in cache
+            tb_writer.flush()
+
+        """
+            ------
+            saving
+            ------
+        """
+        # save D
+        if e % 5 == 0:
+            torch.save(
+                D.state_dict(),
+                Path(
+                    root_path, "logs", experiment_id, f"model_epoch_D{e:0>3}.pth"
+                ).as_posix(),
+            )
+
+        # save G
+        if e % 5 == 0:
+            torch.save(
+                G.state_dict(),
+                Path(
+                    root_path, "logs", experiment_id, f"model_epoch_G{e:0>3}.pth"
+                ).as_posix(),
+            )
 
 
 if __name__ == "__main__":
