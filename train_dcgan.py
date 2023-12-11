@@ -278,7 +278,6 @@ def main(
                 },
                 step=e,
             )
-        wandb.finish()
 
         """
             ------
@@ -306,3 +305,4 @@ def main(
 
 if __name__ == "__main__":
     typer.run(main)
+    wandb.finish()
