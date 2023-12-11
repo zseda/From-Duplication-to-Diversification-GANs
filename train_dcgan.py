@@ -13,7 +13,8 @@ from src.models import DCDiscriminator, DCGenerator, weights_init_normal
 from torchvision.utils import make_grid
 import timm
 import wandb
-
+from pytorch_lightning.loggers import WandbLogger
+import datetime
 
 def main(
     root_path: str = typer.Option("."),
@@ -27,6 +28,16 @@ def main(
     # %80=48.000 %60=36.000 %40 =24.000 %20 = 12.000
     dataset_size: int = typer.Option(48000),
 ):
+    current_time = datetime.now()
+    session_name = current_time.strftime("%Y-%m-%d_%H-%M-%S")
+    # Weights & Biases setup for online-only logging
+    wandb.init(
+        project="GAN-CIFAR10",
+        name="DCGAN-train-" + session_name,
+        settings=wandb.Settings(mode="online"),
+    )
+
+    wandb_logger = WandbLogger()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"batch_size: {batch_size}")
     tb_path = Path(root_path, "logs", experiment_id)
@@ -170,7 +181,7 @@ def main(
             # generate images via G
             # create labels for testing generator
             # convert to one hot encoding
-            z = Variable(torch.randn(actual_batch_size, z_dim).to(device))
+            z = Varwandb.finish()iable(torch.randn(actual_batch_size, z_dim).to(device))
 
             G_output, G_output_logits = G(z, labels_fake_onehot)
             D_out = D(G_output, labels_fake_onehot)
@@ -266,6 +277,8 @@ def main(
                 },
                 step=e,
             )
+        wandb.finish()
+        
 
         """
             ------
