@@ -9,6 +9,16 @@ from src.models import Generator, Discriminator
 from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
 
+sweep_config = {
+    "method": "random",  # You can choose grid, random, or bayes
+    "metric": {"name": "loss", "goal": "minimize"},
+    "parameters": {
+        "lr_gen": {"values": [0.0001, 0.0002, 0.0005]},
+        "lr_disc": {"values": [0.0001, 0.0002, 0.0005]},
+        "optimizer_type": {"values": ["adam", "sgd", "rmsprop"]},  # Including RMSprop
+    },
+}
+
 
 # TODO: try different weight init methods
 def init_weights(m):
@@ -21,8 +31,11 @@ def init_weights(m):
 
 
 class GAN(pl.LightningModule):
-    def __init__(self):
+    def __init__(self, lr_gen=0.0002, lr_disc=0.0002, optimizer_type="adam"):
         super(GAN, self).__init__()
+        self.lr_gen = lr_gen
+        self.lr_disc = lr_disc
+        self.optimizer_type = optimizer_type
 
         # create generator
         self.generator = Generator(self.device).to(self.device)
@@ -174,13 +187,22 @@ class GAN(pl.LightningModule):
         }
 
     def configure_optimizers(self):
-        optimizer_g = torch.optim.Adam(
-            self.generator.get_generative_parameters(), lr=0.0002, betas=(0.5, 0.999)
-        )
-        # TODO: try out different learning rates for discriminator
-        optimizer_d = torch.optim.Adam(
-            self.discriminator.parameters(), lr=0.0002, betas=(0.5, 0.999)
-        )
+        if self.optimizer_type == "adam":
+            optimizer_g = torch.optim.Adam(
+                self.generator.get_generative_parameters(),
+                lr=self.lr_gen,
+                betas=(0.5, 0.999),
+            )
+            optimizer_d = torch.optim.Adam(
+                self.discriminator.parameters(), lr=self.lr_disc, betas=(0.5, 0.999)
+            )
+        elif self.optimizer_type == "sgd":
+            optimizer_g = torch.optim.SGD(
+                self.generator.get_generative_parameters(), lr=self.lr_gen, momentum=0.9
+            )
+            optimizer_d = torch.optim.SGD(
+                self.discriminator.parameters(), lr=self.lr_disc, momentum=0.9
+            )
         # Get both optimizers
         self.opt_g = optimizer_g
         self.opt_d = optimizer_d
@@ -191,23 +213,38 @@ class GAN(pl.LightningModule):
         return get_cifar10_dataloader(target_class=4, batch_size=128, num_workers=8)[0]
 
 
-current_time = datetime.now()
-session_name = current_time.strftime("%Y-%m-%d_%H-%M-%S")
-# Weights & Biases setup for online-only logging
-wandb.init(
-    project="GAN-CIFAR10",
-    name="Basic-GAN-train-" + session_name,
-    settings=wandb.Settings(mode="online"),
-)
+def train(config=None):
+    # Generate a unique session name
+    current_time = datetime.now()
+    session_name = current_time.strftime("%Y-%m-%d_%H-%M-%S")
 
-wandb_logger = WandbLogger()
-gpus = 1 if torch.cuda.is_available() else 0
-# start training
-logger.info("Starting training...")
-torch.set_float32_matmul_precision("medium")  # or 'high' based on your precision needs
-trainer = pl.Trainer(max_epochs=150, accelerator="gpu", devices=1, logger=wandb_logger)
-gan = GAN()
-trainer.fit(gan)
+    with wandb.init(
+        project="GAN-CIFAR10",
+        name="Basic-GAN-train-" + session_name,
+        settings=wandb.Settings(mode="online"),
+        config=config,
+    ):
+        config = wandb.config
+
+        model = GAN(
+            lr_gen=config.lr_gen,
+            lr_disc=config.lr_disc,
+            optimizer_type=config.optimizer_type,
+        )
+        wandb_logger = WandbLogger()
+        gpus = 1 if torch.cuda.is_available() else 0
+        logger.info("Starting training...")
+        torch.set_float32_matmul_precision("medium")
+
+        trainer = pl.Trainer(
+            max_epochs=150, accelerator="gpu", devices=gpus, logger=wandb_logger
+        )
+        trainer.fit(model)
+
+
+sweep_id = wandb.sweep(sweep_config, project="GAN-CIFAR10")
+
+wandb.agent(sweep_id, train, count=10)  # Adjust count as needed
 
 wandb.finish()
 logger.info("Finished training!")
