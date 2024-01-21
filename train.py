@@ -27,8 +27,8 @@ class GAN(pl.LightningModule):
         # create generator
         self.generator = Generator(self.device).to(self.device)
         # generator dummy call => init lazy layers
-        dummy_noise = torch.rand(size=(2, 56, 2, 2)).to(self.device)
-        dummy_images = torch.rand(size=(2, 3, 32, 32)).to(self.device)
+        dummy_noise = torch.rand(size=(1, 56, 2, 2)).to(self.device)
+        dummy_images = torch.rand(size=(1, 3, 32, 32)).to(self.device)
         self.generator(dummy_images, dummy_noise)
         # initialize weights
         for layer in self.generator.generative.modules():
@@ -204,8 +204,15 @@ gan.generator.eval()
 # Prepare a dummy input tensor. The size should match the input size of your generator model.
 # cifar dummy input
 dummy_noise = torch.rand(size=(1, 56, 2, 2))
+dummy_image = torch.rand(size=(1, 3, 32, 32))
 # Export the model to an ONNX file
-torch.onnx.export(gan.generator, dummy_noise, "best_generator.onnx", opset_version=11)
+torch.onnx.export(
+    gan.generator,
+    dummy_image,
+    dummy_noise,
+    "gan_cifar10.onnx",
+    opset_version=11,
+)
 logger.info("Best performing model saved as ONNX")
 
 wandb.finish()
