@@ -69,6 +69,37 @@ class GAN(pl.LightningModule):
         self.best_loss = float("inf")
         self.best_model_state = None
 
+    def configure_optimizers(self):
+        # Define default optimizers in case none of the conditions match
+        optimizer_g = torch.optim.Adam(
+            self.generator.get_generative_parameters(),
+            lr=self.lr_gen,
+            betas=(0.5, 0.999),
+        )
+        optimizer_d = torch.optim.Adam(
+            self.discriminator.parameters(), lr=self.lr_disc, betas=(0.5, 0.999)
+        )
+
+        # Check for specific optimizer types and update accordingly
+        if self.optimizer_type == "sgd":
+            optimizer_g = torch.optim.SGD(
+                self.generator.get_generative_parameters(), lr=self.lr_gen, momentum=0.9
+            )
+            optimizer_d = torch.optim.SGD(
+                self.discriminator.parameters(), lr=self.lr_disc, momentum=0.9
+            )
+        elif self.optimizer_type == "rmsprop":
+            optimizer_g = torch.optim.RMSprop(
+                self.generator.get_generative_parameters(), lr=self.lr_gen
+            )
+            optimizer_d = torch.optim.RMSprop(
+                self.discriminator.parameters(), lr=self.lr_disc
+            )
+
+        self.opt_g = optimizer_g
+        self.opt_d = optimizer_d
+        return optimizer_d, optimizer_g
+
     def on_epoch_start(self):
         if self.sample_val_images is None:
             self.sample_val_images = next(iter(self.train_dataloader()))[0].to(
@@ -185,37 +216,6 @@ class GAN(pl.LightningModule):
             "loss": loss_g,
             "log": {"loss_generator": loss_g},
         }
-
-    def configure_optimizers(self):
-        # Initialize optimizers to None
-        optimizer_g = None
-        optimizer_d = None
-
-        if self.optimizer_type == "adam":
-            optimizer_g = torch.optim.Adam(
-                self.generator.get_generative_parameters(),
-                lr=self.lr_gen,
-                betas=(0.5, 0.999),
-            )
-            optimizer_d = torch.optim.Adam(
-                self.discriminator.parameters(), lr=self.lr_disc, betas=(0.5, 0.999)
-            )
-        elif self.optimizer_type == "sgd":
-            optimizer_g = torch.optim.SGD(
-                self.generator.get_generative_parameters(), lr=self.lr_gen, momentum=0.9
-            )
-            optimizer_d = torch.optim.SGD(
-                self.discriminator.parameters(), lr=self.lr_disc, momentum=0.9
-            )
-        # Optional: Add an else clause for a default case or other optimizers
-
-        # Ensure optimizers are defined
-        if optimizer_g is None or optimizer_d is None:
-            raise ValueError("Optimizer not defined")
-
-        self.opt_g = optimizer_g
-        self.opt_d = optimizer_d
-        return optimizer_d, optimizer_g
 
     def train_dataloader(self):
         logger.info("Loading training data...")
