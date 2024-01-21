@@ -27,8 +27,8 @@ class GAN(pl.LightningModule):
         # create generator
         self.generator = Generator(self.device).to(self.device)
         # generator dummy call => init lazy layers
-        dummy_noise = torch.rand(size=(1, 56, 2, 2)).to(self.device)
-        dummy_images = torch.rand(size=(1, 3, 32, 32)).to(self.device)
+        dummy_noise = torch.rand(size=(2, 56, 2, 2)).to(self.device)
+        dummy_images = torch.rand(size=(2, 3, 32, 32)).to(self.device)
         self.generator(dummy_images, dummy_noise)
         # initialize weights
         for layer in self.generator.generative.modules():
@@ -107,7 +107,7 @@ class GAN(pl.LightningModule):
         loss_g_id_ssim = 1 - self.ssim(gen_images_id, images)
         loss_g_id_mse = torch.mean((gen_images_id - images) ** 2) * 2
         loss_g_id = loss_g_id_ssim + loss_g_id_mse
-        loss_g = loss_g_div
+        loss_g = loss_g_div + loss_g_id
         if self.d_ema_g_ema_diff < 0.15:
             self.manual_backward(loss_g)
             self.opt_g.step()
