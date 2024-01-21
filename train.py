@@ -195,25 +195,9 @@ gpus = 1 if torch.cuda.is_available() else 0
 # start training
 logger.info("Starting training...")
 torch.set_float32_matmul_precision("medium")  # or 'high' based on your precision needs
-trainer = pl.Trainer(max_epochs=5, accelerator="gpu", devices=1, logger=wandb_logger)
+trainer = pl.Trainer(max_epochs=150, accelerator="gpu", devices=1, logger=wandb_logger)
 gan = GAN()
 trainer.fit(gan)
-gan.generator.load_state_dict(gan.best_model_state)
-# Set the model to evaluation mode
-gan.generator.eval()
-# Prepare a dummy input tensor. The size should match the input size of your generator model.
-# cifar dummy input
-dummy_noise = torch.rand(size=(1, 56, 2, 2))
-dummy_image = torch.rand(size=(1, 3, 32, 32))
-# Export the model to an ONNX file
-torch.onnx.export(
-    gan.generator,
-    dummy_image,
-    dummy_noise,
-    "gan_cifar10.onnx",
-    opset_version=11,
-)
-logger.info("Best performing model saved as ONNX")
 
 wandb.finish()
 logger.info("Finished training!")
