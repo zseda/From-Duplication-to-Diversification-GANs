@@ -47,6 +47,8 @@ class GAN(pl.LightningModule):
         self.sample_val_images = None
 
         self.automatic_optimization = False
+        self.best_loss = float("inf")
+        self.best_model_state = None
 
     def on_epoch_start(self):
         if self.sample_val_images is None:
@@ -104,6 +106,10 @@ class GAN(pl.LightningModule):
         self.g_ema = self.g_ema * 0.9 + loss_g_div.detach().item() * 0.1
 
         self.d_ema_g_ema_diff = self.d_ema - (self.g_ema / 2)
+
+        if loss_g < self.best_loss:
+            self.best_loss = loss_g
+            self.best_model_state = self.generator.state_dict()
 
         if batch_idx % 50 == 0:
             with torch.no_grad():
@@ -192,5 +198,15 @@ torch.set_float32_matmul_precision("medium")  # or 'high' based on your precisio
 trainer = pl.Trainer(max_epochs=500, accelerator="gpu", devices=1, logger=wandb_logger)
 gan = GAN()
 trainer.fit(gan)
+gan.generator.load_state_dict(gan.best_model_state)
+# Set the model to evaluation mode
+gan.generator.eval()
+# Prepare a dummy input tensor. The size should match the input size of your generator model.
+# cifar dummy input
+dummy_input = torch.randn(1, 3, 32, 32)
+# Export the model to an ONNX file
+torch.onnx.export(gan.generator, dummy_input, "best_generator.onnx", opset_version=11)
+logger.info("Best performing model saved as ONNX")
+
 wandb.finish()
 logger.info("Finished training!")
