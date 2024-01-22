@@ -10,7 +10,6 @@ from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
 from pytorch_msssim import SSIM
 from torchmetrics.image.inception import InceptionScore
 from torchmetrics.image.fid import FrechetInceptionDistance
-from src.utils import init_weights
 import torch.nn.functional as F
 
 sweep_config = {
