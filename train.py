@@ -8,6 +8,9 @@ from datetime import datetime
 from src.models import Generator, Discriminator
 from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
+from torchmetrics.image.inception import InceptionScore
+from torchmetrics.image.fid import FrechetInceptionDistance
+
 
 sweep_config = {
     "method": "random",  # You can choose grid, random, or bayes
@@ -62,6 +65,8 @@ class GAN(pl.LightningModule):
         # self.criterion_G = lambda output: 0.5 * torch.mean((output - 1) ** 2)
         self.ssim = SSIM(data_range=1.0, size_average=True, channel=3)
         self.sample_val_images = None
+        self.inception_score = InceptionScore(feature="logits_unbiased", splits=10)
+        self.fid = FrechetInceptionDistance(feature=2048, reset_real_features=True)
 
         self.automatic_optimization = False
         self.best_loss = float("inf")
@@ -144,6 +149,10 @@ class GAN(pl.LightningModule):
 
         # TODO: try out no soft-labels for generator (only for discriminator)
         # loss_g_div = self.criterion_G(self.discriminator(gen_imgs))
+        # Update Inception Score and FID
+        self.inception_score.update(gen_imgs)
+        self.fid.update(gen_imgs)
+
         loss_g_div = self.criterion(self.discriminator(gen_imgs), valid)
         gen_images_id = self.generator(images, torch.zeros_like(noise))
         loss_g_id_ssim = 1 - self.ssim(gen_images_id, images)
