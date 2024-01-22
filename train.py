@@ -86,16 +86,13 @@ class GAN(pl.LightningModule):
         self.best_loss = float("inf")
         self.best_model_state = None
 
-    def create_criterion(self, prediction, target, for_discriminator=True):
+    def create_criterion(self):
         if self.hparams.loss_type == "BCE":
-            return F.binary_cross_entropy_with_logits(prediction, target)
+            return torch.nn.BCELoss()
         elif self.hparams.loss_type == "LSGAN":
-            return torch.mean((prediction - target) ** 2)
+            return torch.nn.MSELoss()
         elif self.hparams.loss_type == "Hinge":
-            if for_discriminator:
-                return torch.mean(torch.relu(1.0 - prediction * target))
-            else:
-                return -torch.mean(prediction)
+            return torch.nn.HingeEmbeddingLoss()
         # TODO implement WASG Loss
         else:
             raise ValueError(f"Unsupported loss type: {self.hparams.loss_type}")
