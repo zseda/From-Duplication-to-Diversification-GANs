@@ -10,27 +10,9 @@ from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
 from torchmetrics.image.inception import InceptionScore
 from torchmetrics.image.fid import FrechetInceptionDistance
-
-
-sweep_config = {
-    "method": "random",  # You can choose grid, random, or bayes
-    "metric": {"name": "loss", "goal": "minimize"},
-    "parameters": {
-        "lr_gen": {"values": [0.0001, 0.0002, 0.0005]},
-        "lr_disc": {"values": [0.0001, 0.0002, 0.0005]},
-        "optimizer_type": {"values": ["adam", "sgd", "rmsprop"]},  # Including RMSprop
-    },
-}
-
-
-# TODO: try different weight init methods
-def init_weights(m):
-    if isinstance(m, (torch.nn.Conv2d, torch.nn.ConvTranspose2d, torch.nn.Linear)):
-        torch.nn.init.xavier_uniform_(m.weight)
-        torch.nn.init.constant_(m.bias, 0.0)
-    elif isinstance(m, torch.nn.BatchNorm2d):
-        torch.nn.init.normal_(m.weight)
-        torch.nn.init.constant_(m.bias, 0.0)
+from src.config import sweep_config
+from src.utils import init_weights
+import torch.nn.functional as F
 
 
 class GAN(pl.LightningModule):
@@ -58,11 +40,8 @@ class GAN(pl.LightningModule):
         self.d_ema = 0
         self.d_ema_g_ema_diff = 0
 
-        self.criterion = torch.nn.BCELoss()
-        # For the discriminator
-        # self.criterion_D = lambda output, target: 0.5 * torch.mean(    (output - target) ** 2 )
-        # For the generator
-        # self.criterion_G = lambda output: 0.5 * torch.mean((output - 1) ** 2)
+        # self.criterion = torch.nn.BCELoss()
+        self.criterion = self.create_criterion()
         self.ssim = SSIM(data_range=1.0, size_average=True, channel=3)
         self.sample_val_images = None
         self.inception_score = InceptionScore(feature="logits_unbiased", splits=10)
@@ -71,6 +50,20 @@ class GAN(pl.LightningModule):
         self.automatic_optimization = False
         self.best_loss = float("inf")
         self.best_model_state = None
+
+    def create_criterion(self, prediction, target, for_discriminator=True):
+        if self.hparams.loss_type == "BCE":
+            return F.binary_cross_entropy_with_logits(prediction, target)
+        elif self.hparams.loss_type == "LSGAN":
+            return torch.mean((prediction - target) ** 2)
+        elif self.hparams.loss_type == "Hinge":
+            if for_discriminator:
+                return torch.mean(torch.relu(1.0 - prediction * target))
+            else:
+                return -torch.mean(prediction)
+        # TODO implement WASG Loss
+        else:
+            raise ValueError(f"Unsupported loss type: {self.hparams.loss_type}")
 
     def configure_optimizers(self):
         # Define default optimizers in case none of the conditions match
@@ -114,26 +107,30 @@ class GAN(pl.LightningModule):
         images = images.to(self.device)
         batch_size = images.size(0)
         noise = torch.rand(size=(batch_size, 56, 2, 2)).to(self.device)
+        # Generate fake images
+        fake_images = self.generator(images, noise)
 
-        # Move the valid and fake tensors to the same device as the model
-        # valid = torch.ones(batch_size, 1).to(self.device)
-        # fake = torch.zeros(batch_size, 1).to(self.device)
-
-        # soft labels
-        # TODO: try out more or less randomness
+        # Soft labels
         valid = torch.rand((batch_size, 1), device=self.device) * 0.1 + 0.9
         fake = torch.rand((batch_size, 1), device=self.device) * 0.1
 
         # Discriminator update
         self.opt_g.zero_grad()
         self.opt_d.zero_grad()
-        real_loss = self.criterion(
-            self.discriminator(images), torch.ones_like(self.discriminator(images))
-        )
-        fake_loss = self.criterion(
-            self.discriminator(self.generator(images, noise)),
-            torch.zeros_like(self.discriminator(self.generator(images, noise))),
-        )
+
+        # Discriminator's prediction
+        real_pred = self.discriminator(images)
+        fake_pred = self.discriminator(fake_images.detach())
+
+        # Loss for real and fake images
+        if self.hparams.loss_type in ["BCE", "LSGAN"]:
+            real_loss = self.criterion(real_pred, valid)
+            fake_loss = self.criterion(fake_pred, fake)
+        elif self.hparams.loss_type == "Hinge":
+            real_loss = torch.mean(torch.relu(1.0 - real_pred))
+            fake_loss = torch.mean(torch.relu(1.0 + fake_pred))
+        else:
+            raise ValueError(f"Unsupported loss type: {self.hparams.loss_type}")
         loss_d = (real_loss + fake_loss) / 2
         if self.d_ema_g_ema_diff > -0.15:
             self.manual_backward(loss_d)
@@ -145,15 +142,22 @@ class GAN(pl.LightningModule):
         # Generator update
         self.opt_g.zero_grad()
         self.opt_d.zero_grad()
-        gen_imgs = self.generator(images, noise)
+
+        gen_pred = self.discriminator(fake_images)
 
         # TODO: try out no soft-labels for generator (only for discriminator)
-        # loss_g_div = self.criterion_G(self.discriminator(gen_imgs))
-        # Update Inception Score and FID
-        self.inception_score.update(gen_imgs)
-        self.fid.update(gen_imgs)
 
-        loss_g_div = self.criterion(self.discriminator(gen_imgs), valid)
+        # Update Inception Score and FID
+        self.inception_score.update(gen_pred)
+        self.fid.update(gen_pred)
+
+        # loss_g_div = self.criterion(self.discriminator(gen_imgs), valid)
+        if self.hparams.loss_type == "BCE":
+            loss_g_div = self.criterion(gen_pred, valid)
+        elif self.hparams.loss_type == "LSGAN":
+            loss_g_div = self.criterion(gen_pred, valid)
+        elif self.hparams.loss_type == "Hinge":
+            loss_g_div = -torch.mean(gen_pred)
         gen_images_id = self.generator(images, torch.zeros_like(noise))
         loss_g_id_ssim = 1 - self.ssim(gen_images_id, images)
         loss_g_id_mse = torch.mean((gen_images_id - images) ** 2) * 2
@@ -203,7 +207,7 @@ class GAN(pl.LightningModule):
         if batch_idx % 250 == 0:
             with torch.no_grad():
                 # Log generated images
-                img_grid = torchvision.utils.make_grid(gen_imgs, normalize=True)
+                img_grid = torchvision.utils.make_grid(fake_images, normalize=True)
                 img_grid_id = torchvision.utils.make_grid(gen_images_id, normalize=True)
                 self.logger.experiment.log(
                     {
@@ -244,7 +248,10 @@ def train(config=None):
 
     with wandb.init(
         project="GAN-CIFAR10",
-        name="Basic-GAN-train-" + session_name,
+        name="Sweep-GAN-train-"
+        + session_name
+        + "-"
+        + config.name,  # Add the config name to the run name
         settings=wandb.Settings(mode="online"),
         config=config,
     ):
