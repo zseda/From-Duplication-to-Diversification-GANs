@@ -26,12 +26,36 @@ sweep_config = {
 }
 
 
+def init_weights(m, weight_init):
+    if isinstance(m, (torch.nn.Conv2d, torch.nn.ConvTranspose2d, torch.nn.Linear)):
+        if weight_init == "normal":
+            torch.nn.init.normal_(m.weight)
+        elif weight_init == "xavier":
+            torch.nn.init.xavier_uniform_(m.weight)
+        elif weight_init == "kaiming":
+            torch.nn.init.kaiming_uniform_(m.weight)
+        if m.bias is not None:
+            torch.nn.init.constant_(m.bias, 0.0)
+    elif isinstance(m, torch.nn.BatchNorm2d):
+        torch.nn.init.constant_(m.weight, 1.0)  # Gamma initialized to 1
+        torch.nn.init.constant_(m.bias, 0.0)  # Beta initialized to 0
+
+
 class GAN(pl.LightningModule):
-    def __init__(self, lr_gen=0.0002, lr_disc=0.0002, optimizer_type="adam"):
+    def __init__(
+        self,
+        lr_gen=0.0002,
+        lr_disc=0.0002,
+        optimizer_type="adam",
+        weight_init="normal",
+        loss_type="BCE",
+    ):
         super(GAN, self).__init__()
         self.lr_gen = lr_gen
         self.lr_disc = lr_disc
         self.optimizer_type = optimizer_type
+        self.weight_init = weight_init
+        self.loss_type = loss_type
 
         # create generator
         self.generator = Generator(self.device).to(self.device)
@@ -269,6 +293,8 @@ def train(config=None):
             lr_gen=config.lr_gen,
             lr_disc=config.lr_disc,
             optimizer_type=config.optimizer_type,
+            weight_init=config.weight_init,
+            loss_type=config.loss_type,
         )
         wandb_logger = WandbLogger()
         gpus = 1 if torch.cuda.is_available() else 0
