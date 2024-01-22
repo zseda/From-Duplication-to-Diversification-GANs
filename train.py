@@ -95,7 +95,7 @@ class GAN(pl.LightningModule):
             return torch.nn.HingeEmbeddingLoss()
         # TODO implement WASG Loss
         else:
-            raise ValueError(f"Unsupported loss type: {self.hparams.loss_type}")
+            raise ValueError(f"Unsupported loss type: {self.loss_type}")
 
     def configure_optimizers(self):
         # Define default optimizers in case none of the conditions match
@@ -155,10 +155,10 @@ class GAN(pl.LightningModule):
         fake_pred = self.discriminator(fake_images.detach())
 
         # Loss for real and fake images
-        if self.hparams.loss_type in ["BCE", "LSGAN"]:
+        if self.loss_type in ["BCE", "LSGAN"]:
             real_loss = self.criterion(real_pred, valid)
             fake_loss = self.criterion(fake_pred, fake)
-        elif self.hparams.loss_type == "Hinge":
+        elif self.loss_type == "Hinge":
             real_loss = torch.mean(torch.relu(1.0 - real_pred))
             fake_loss = torch.mean(torch.relu(1.0 + fake_pred))
         else:
@@ -184,11 +184,11 @@ class GAN(pl.LightningModule):
         self.fid.update(gen_pred)
 
         # loss_g_div = self.criterion(self.discriminator(gen_imgs), valid)
-        if self.hparams.loss_type == "BCE":
+        if self.loss_type == "BCE":
             loss_g_div = self.criterion(gen_pred, valid)
-        elif self.hparams.loss_type == "LSGAN":
+        elif self.loss_type == "LSGAN":
             loss_g_div = self.criterion(gen_pred, valid)
-        elif self.hparams.loss_type == "Hinge":
+        elif self.loss_type == "Hinge":
             loss_g_div = -torch.mean(gen_pred)
         gen_images_id = self.generator(images, torch.zeros_like(noise))
         loss_g_id_ssim = 1 - self.ssim(gen_images_id, images)
