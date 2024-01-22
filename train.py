@@ -44,11 +44,11 @@ def init_weights(m, weight_init):
 class GAN(pl.LightningModule):
     def __init__(
         self,
-        lr_gen=0.0002,
-        lr_disc=0.0002,
-        optimizer_type="adam",
-        weight_init="normal",
-        loss_type="BCE",
+        lr_gen,
+        lr_disc,
+        optimizer_type,
+        weight_init,
+        loss_type,
     ):
         super(GAN, self).__init__()
         self.lr_gen = lr_gen
@@ -87,11 +87,11 @@ class GAN(pl.LightningModule):
         self.best_model_state = None
 
     def create_criterion(self):
-        if self.hparams.loss_type == "BCE":
+        if self.loss_type == "BCE":
             return torch.nn.BCELoss()
-        elif self.hparams.loss_type == "LSGAN":
+        elif self.loss_type == "LSGAN":
             return torch.nn.MSELoss()
-        elif self.hparams.loss_type == "Hinge":
+        elif self.loss_type == "Hinge":
             return torch.nn.HingeEmbeddingLoss()
         # TODO implement WASG Loss
         else:
