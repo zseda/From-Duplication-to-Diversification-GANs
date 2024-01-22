@@ -180,8 +180,8 @@ class GAN(pl.LightningModule):
         # TODO: try out no soft-labels for generator (only for discriminator)
 
         # Update Inception Score and FID
-        self.inception_score.update(gen_pred)
-        self.fid.update(gen_pred)
+        self.inception_score.update(fake_images)
+        self.fid.update(fake_images)
 
         # loss_g_div = self.criterion(self.discriminator(gen_imgs), valid)
         if self.loss_type == "BCE":
