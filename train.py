@@ -8,8 +8,6 @@ from datetime import datetime
 from src.models import Generator, Discriminator
 from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
 from pytorch_msssim import SSIM
-from torchmetrics.image.inception import InceptionScore
-from torchmetrics.image.fid import FrechetInceptionDistance
 import torch.nn.functional as F
 from functools import partial
 
@@ -79,8 +77,6 @@ class GAN(pl.LightningModule):
         self.criterion = self.create_criterion()
         self.ssim = SSIM(data_range=1.0, size_average=True, channel=3)
         self.sample_val_images = None
-        self.inception_score = InceptionScore(feature="logits_unbiased", splits=10)
-        self.fid = FrechetInceptionDistance(feature=2048, reset_real_features=True)
 
         self.automatic_optimization = False
         self.best_loss = float("inf")
@@ -181,10 +177,6 @@ class GAN(pl.LightningModule):
 
         # TODO: try out no soft-labels for generator (only for discriminator)
 
-        # Update Inception Score and FID
-        self.inception_score.update(fake_images_uint8)
-        self.fid.update(fake_images_uint8, images_uint8)
-
         # loss_g_div = self.criterion(self.discriminator(gen_imgs), valid)
         if self.loss_type == "BCE":
             loss_g_div = self.criterion(gen_pred, valid)
@@ -212,13 +204,6 @@ class GAN(pl.LightningModule):
 
         if batch_idx % 50 == 0:
             with torch.no_grad():
-                # log metrics
-                # Compute metrics
-                inception_score_value = self.inception_score.compute()
-                fid_value = self.fid.compute()
-                # Reset metrics
-                self.inception_score.reset()
-                self.fid.reset()
                 self.logger.experiment.log(
                     {
                         "losses/d_fake": fake_loss,
@@ -232,8 +217,6 @@ class GAN(pl.LightningModule):
                         "losses/g_id_mse": loss_g_id_mse,
                         "losses/g_id": loss_g_id,
                         "losses/g": loss_g,
-                        "metrics/IS": inception_score_value,
-                        "metrics/FID": fid_value,
                     }
                 )
 
