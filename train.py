@@ -141,6 +141,7 @@ class GAN(pl.LightningModule):
         noise = torch.rand(size=(batch_size, 56, 2, 2)).to(self.device)
         # Generate fake images
         fake_images = self.generator(images, noise)
+        fake_images_uint8 = (fake_images * 255).to(torch.uint8)
 
         # Soft labels
         valid = torch.rand((batch_size, 1), device=self.device) * 0.1 + 0.9
@@ -180,8 +181,8 @@ class GAN(pl.LightningModule):
         # TODO: try out no soft-labels for generator (only for discriminator)
 
         # Update Inception Score and FID
-        self.inception_score.update(fake_images)
-        self.fid.update(fake_images)
+        self.inception_score.update(fake_images_uint8)
+        self.fid.update(fake_images_uint8)
 
         # loss_g_div = self.criterion(self.discriminator(gen_imgs), valid)
         if self.loss_type == "BCE":
