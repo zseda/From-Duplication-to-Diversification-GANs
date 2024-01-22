@@ -7,12 +7,23 @@ from pytorch_lightning.loggers import WandbLogger
 from datetime import datetime
 from src.models import Generator, Discriminator
 from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
-from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
+from pytorch_msssim import SSIM
 from torchmetrics.image.inception import InceptionScore
 from torchmetrics.image.fid import FrechetInceptionDistance
-from src.config import sweep_config
 from src.utils import init_weights
 import torch.nn.functional as F
+
+sweep_config = {
+    "method": "bayes",
+    "metric": {"name": "loss", "goal": "minimize"},
+    "parameters": {
+        "lr_gen": {"values": [0.00005, 0.0001, 0.0002, 0.0005]},
+        "lr_disc": {"values": [0.00005, 0.0001, 0.0002, 0.0005]},
+        "weight_init": {"values": ["normal", "xavier", "kaiming"]},
+        "loss_type": {"values": ["BCE", "LSGAN", "Hinge"]},
+        "optimizer_type": {"values": ["adam", "sgd", "rmsprop"]},
+    },
+}
 
 
 class GAN(pl.LightningModule):
