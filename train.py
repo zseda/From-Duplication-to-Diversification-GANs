@@ -174,7 +174,13 @@ class GAN(pl.LightningModule):
 
         if batch_idx % 50 == 0:
             with torch.no_grad():
-                # log losses
+                # log metrics
+                # Compute metrics
+                inception_score_value = self.inception_score.compute()
+                fid_value = self.fid.compute()
+                # Reset metrics
+                self.inception_score.reset()
+                self.fid.reset()
                 self.logger.experiment.log(
                     {
                         "losses/d_fake": fake_loss,
@@ -188,6 +194,8 @@ class GAN(pl.LightningModule):
                         "losses/g_id_mse": loss_g_id_mse,
                         "losses/g_id": loss_g_id,
                         "losses/g": loss_g,
+                        "metrics/IS": inception_score_value,
+                        "metrics/FID": fid_value,
                     }
                 )
 
