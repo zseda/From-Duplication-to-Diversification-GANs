@@ -259,10 +259,7 @@ def train(config=None):
 
     with wandb.init(
         project="GAN-CIFAR10",
-        name="Sweep-GAN-train-"
-        + session_name
-        + "-"
-        + config.name,  # Add the config name to the run name
+        name="Sweep-GAN-train-" + session_name,
         settings=wandb.Settings(mode="online"),
         config=config,
     ):
