@@ -6,7 +6,7 @@ from loguru import logger
 from pytorch_lightning.loggers import WandbLogger
 from datetime import datetime
 from src.models import Generator, Discriminator
-from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
+from src.data import get_cifar10_dataloader
 from pytorch_msssim import SSIM
 import torch.nn.functional as F
 from functools import partial
@@ -20,6 +20,7 @@ sweep_config = {
         "weight_init": {"values": ["normal", "xavier", "kaiming"]},
         "loss_type": {"values": ["BCE", "LSGAN", "Hinge"]},
         "optimizer_type": {"values": ["adam", "sgd", "rmsprop"]},
+        "batch_size": {"values": [32, 64, 128]},
     },
 }
 
@@ -47,6 +48,7 @@ class GAN(pl.LightningModule):
         optimizer_type,
         weight_init,
         loss_type,
+        batch_size,
     ):
         super(GAN, self).__init__()
         self.lr_gen = lr_gen
@@ -54,6 +56,7 @@ class GAN(pl.LightningModule):
         self.optimizer_type = optimizer_type
         self.weight_init = weight_init
         self.loss_type = loss_type
+        self.batch_size = batch_size
 
         # create generator
         self.generator = Generator(self.device).to(self.device)
@@ -255,7 +258,7 @@ class GAN(pl.LightningModule):
 
     def train_dataloader(self):
         logger.info("Loading training data...")
-        return get_cifar10_dataloader(target_class=4, batch_size=128, num_workers=8)[0]
+        return get_cifar10_dataloader(self.batch_size, num_workers=8)[0]
 
 
 def train(config=None):
@@ -277,6 +280,7 @@ def train(config=None):
             optimizer_type=config.optimizer_type,
             weight_init=config.weight_init,
             loss_type=config.loss_type,
+            batch_size=config.batch_size,
         )
         wandb_logger = WandbLogger()
         gpus = 1 if torch.cuda.is_available() else 0
