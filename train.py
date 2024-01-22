@@ -11,6 +11,7 @@ from pytorch_msssim import SSIM
 from torchmetrics.image.inception import InceptionScore
 from torchmetrics.image.fid import FrechetInceptionDistance
 import torch.nn.functional as F
+from functools import partial
 
 sweep_config = {
     "method": "bayes",
@@ -64,7 +65,7 @@ class GAN(pl.LightningModule):
         self.generator(dummy_images, dummy_noise)
         # initialize weights
         for layer in self.generator.generative.modules():
-            layer.apply(init_weights)
+            layer.apply(partial(init_weights, weight_init))
 
         # create discriminator
         self.discriminator = Discriminator().to(self.device)
