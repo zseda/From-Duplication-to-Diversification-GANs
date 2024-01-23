@@ -168,7 +168,7 @@ class GAN(pl.LightningModule):
 
     def train_dataloader(self):
         logger.info("Loading training data...")
-        return get_cifar10_dataloader(target_class=1, batch_size=64, num_workers=8)[0]
+        return get_cifar10_dataloader(target_class=4, batch_size=64, num_workers=8)[0]
 
 
 current_time = datetime.now()
@@ -176,7 +176,7 @@ session_name = current_time.strftime("%Y-%m-%d_%H-%M-%S")
 # Weights & Biases setup for online-only logging
 wandb.init(
     project="GAN-CIFAR10",
-    name="GAN-EMA-SSIM-04" + session_name,
+    name="GAN-EMA-SSIM-0.15-ADAIN" + session_name,
     settings=wandb.Settings(mode="online"),
 )
 
