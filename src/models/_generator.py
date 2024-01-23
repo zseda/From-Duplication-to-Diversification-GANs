@@ -158,10 +158,17 @@ class AdaIN(nn.Module):
 class FiLM(nn.Module):
     def __init__(self, noise_dim, num_features):
         super().__init__()
-        self.scale_transform = nn.Linear(noise_dim, num_features)
-        self.shift_transform = nn.Linear(noise_dim, num_features)
+        # Adjust the input dimension of the linear layers
+        self.scale_transform = nn.Linear(noise_dim * 2 * 2, num_features)
+        self.shift_transform = nn.Linear(noise_dim * 2 * 2, num_features)
 
     def forward(self, features, noise):
+        # Flatten the noise tensor
+        batch_size = noise.size(0)
+        noise = noise.view(
+            batch_size, -1
+        )  # Reshape noise to [batch_size, noise_dim*2*2]
+
         scale = self.scale_transform(noise).unsqueeze(-1).unsqueeze(-1)
         shift = self.shift_transform(noise).unsqueeze(-1).unsqueeze(-1)
         return scale * features + shift
@@ -198,8 +205,8 @@ class Generator(nn.Module):
             # out_indices=[3], # efficientnet b0
             out_indices=[1],  # edgenext_xx_small
         ).to(device)
-        self.adain = AdaIN(style_dim=56, content_dim=48).to(device)
-        # self.film = FiLM(noise_dim=56, num_features=88).to(device)
+        # self.adain = AdaIN(style_dim=56, content_dim=88).to(device)
+        self.film = FiLM(noise_dim=56, num_features=48).to(device)
 
         # generative module
         self.generative = nn.Sequential(
@@ -225,7 +232,7 @@ class Generator(nn.Module):
                 kernel_size=3,
                 padding=1,
             ),
-        )  # 32x32
+        )
 
     def get_generative_parameters(self):
         """Returns parameters of the generative module"""
@@ -241,10 +248,11 @@ class Generator(nn.Module):
         # => merging at dim=1 means concat at channel dim => (b, c, h, w)
         # TODO: check out adaptive instance normalization
         #
-
+        logger.debug(features.shape)
+        logger.debug(noise.shape)
         # Use AdaIN to merge noise with features
-        merged = self.adain(features, noise)
-        # merged = self.film(features, noise)
+        # merged = self.adain(features, noise)
+        merged = self.film(features, noise)
         # merged = torch.cat((features, noise), dim=1)
 
         # compute output image
