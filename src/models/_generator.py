@@ -198,15 +198,15 @@ class Generator(nn.Module):
         # feature extractor for processing input images
         self.feature_extractor = timm.create_model(
             # "efficientnet_b0",
-            "edgenext_xx_small",
+            "resnet18",
             pretrained=True,
             features_only=True,
             # TODO: test diffrent output indices for feature extraction
             # out_indices=[3], # efficientnet b0
-            out_indices=[1],  # edgenext_xx_small
+            out_indices=[3],  # edgenext_xx_small
         ).to(device)
         # self.adain = AdaIN(style_dim=56, content_dim=88).to(device)
-        self.film = FiLM(noise_dim=56, num_features=48).to(device)
+        self.film = FiLM(noise_dim=56, num_features=256).to(device)
 
         # generative module
         self.generative = nn.Sequential(
@@ -225,6 +225,8 @@ class Generator(nn.Module):
             CustomStackedDecodeModule(in_channels=32, out_channels=16),
             nn.UpsamplingBilinear2d(scale_factor=2),
             # 16x16
+            CustomStackedDecodeModule(in_channels=16, out_channels=16),
+            nn.UpsamplingBilinear2d(scale_factor=2),
             CustomStackedDecodeModule(in_channels=16, out_channels=8),
             nn.Conv2d(
                 in_channels=8,
