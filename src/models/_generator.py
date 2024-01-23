@@ -135,6 +135,20 @@ class StackedDecodingModule(nn.Module):
         return residual
 
 
+class AdaIN(nn.Module):
+    def __init__(self, style_dim, content_dim):
+        super().__init__()
+        # Define layers to learn affine transformation parameters
+        self.style_scale_transform = nn.Linear(style_dim, content_dim)
+        self.style_shift_transform = nn.Linear(style_dim, content_dim)
+
+    def forward(self, content, style):
+        style_scale = self.style_scale_transform(style).unsqueeze(-1).unsqueeze(-1)
+        style_shift = self.style_shift_transform(style).unsqueeze(-1).unsqueeze(-1)
+        normalized_content = F.instance_norm(content)
+        return normalized_content * style_scale + style_shift
+
+
 class Generator(nn.Module):
     def __init__(self, device):
         super().__init__()
@@ -209,7 +223,12 @@ class Generator(nn.Module):
         # => noise and features need to have *same* dimensions if concatenated
         # => merging at dim=1 means concat at channel dim => (b, c, h, w)
         # TODO: check out adaptive instance normalization
-        merged = torch.cat((features, noise), dim=1)
+        #
+
+        self.adain = AdaIN(style_dim=128, content_dim=128)
+        # Use AdaIN to merge noise with features
+        merged = self.adain(features, noise)
+        # merged = torch.cat((features, noise), dim=1)
 
         # compute output image
         output_img = self.generative(merged)
