@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import timm
 
 from functools import partial
+from loguru import logger
 
 
 class CustomLayer(nn.Module):
@@ -139,10 +140,15 @@ class AdaIN(nn.Module):
     def __init__(self, style_dim, content_dim):
         super().__init__()
         # Define layers to learn affine transformation parameters
-        self.style_scale_transform = nn.Linear(style_dim, content_dim)
-        self.style_shift_transform = nn.Linear(style_dim, content_dim)
+        # Adjust style_dim to be style_dim * height * width
+        self.style_scale_transform = nn.Linear(style_dim * 2 * 2, content_dim)
+        self.style_shift_transform = nn.Linear(style_dim * 2 * 2, content_dim)
 
     def forward(self, content, style):
+        # Flatten the style tensor
+        batch_size = style.size(0)
+        style = style.view(batch_size, -1)
+
         style_scale = self.style_scale_transform(style).unsqueeze(-1).unsqueeze(-1)
         style_shift = self.style_shift_transform(style).unsqueeze(-1).unsqueeze(-1)
         normalized_content = F.instance_norm(content)
@@ -225,7 +231,7 @@ class Generator(nn.Module):
         # TODO: check out adaptive instance normalization
         #
 
-        self.adain = AdaIN(style_dim=128, content_dim=128)
+        self.adain = AdaIN(style_dim=56, content_dim=88)
         # Use AdaIN to merge noise with features
         merged = self.adain(features, noise)
         # merged = torch.cat((features, noise), dim=1)
