@@ -218,9 +218,6 @@ class Generator(nn.Module):
             CustomStackedDecodeModule(in_channels=32, out_channels=16),
             nn.UpsamplingBilinear2d(scale_factor=2),
             # 16x16
-            CustomStackedDecodeModule(in_channels=16, out_channels=16),
-            nn.UpsamplingBilinear2d(scale_factor=2),
-            # 32x32
             CustomStackedDecodeModule(in_channels=16, out_channels=8),
             nn.Conv2d(
                 in_channels=8,
@@ -228,7 +225,7 @@ class Generator(nn.Module):
                 kernel_size=3,
                 padding=1,
             ),
-        )
+        )  # 32x32
 
     def get_generative_parameters(self):
         """Returns parameters of the generative module"""
