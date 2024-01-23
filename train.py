@@ -60,14 +60,10 @@ class GAN(pl.LightningModule):
         batch_size = images.size(0)
         noise = torch.rand(size=(batch_size, 56, 2, 2)).to(self.device)
 
-        # Move the valid and fake tensors to the same device as the model
-        # valid = torch.ones(batch_size, 1).to(self.device)
-        # fake = torch.zeros(batch_size, 1).to(self.device)
-
         # soft labels
         # TODO: try out more or less randomness
-        valid = torch.rand((batch_size, 1), device=self.device) * 0.1 + 0.9
-        fake = torch.rand((batch_size, 1), device=self.device) * 0.1
+        valid = torch.rand((batch_size, 1), device=self.device) * 0.1 + 0.8
+        fake = torch.rand((batch_size, 1), device=self.device) * 0.1 + 0.1
 
         # Discriminator update
         self.opt_g.zero_grad()
@@ -172,7 +168,7 @@ class GAN(pl.LightningModule):
 
     def train_dataloader(self):
         logger.info("Loading training data...")
-        return get_cifar10_dataloader(target_class=4, batch_size=128, num_workers=8)[0]
+        return get_cifar10_dataloader(target_class=1, batch_size=64, num_workers=8)[0]
 
 
 current_time = datetime.now()
