@@ -186,6 +186,7 @@ class Generator(nn.Module):
             # out_indices=[3], # efficientnet b0
             out_indices=[2],  # edgenext_xx_small
         ).to(device)
+        self.adain = AdaIN(style_dim=56, content_dim=88).to(device)
 
         # generative module
         self.generative = nn.Sequential(
@@ -231,7 +232,6 @@ class Generator(nn.Module):
         # TODO: check out adaptive instance normalization
         #
 
-        self.adain = AdaIN(style_dim=56, content_dim=88)
         # Use AdaIN to merge noise with features
         merged = self.adain(features, noise)
         # merged = torch.cat((features, noise), dim=1)
