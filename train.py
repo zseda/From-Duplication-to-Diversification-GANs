@@ -62,8 +62,8 @@ class GAN(pl.LightningModule):
 
         # soft labels
         # TODO: try out more or less randomness
-        valid = torch.rand((batch_size, 1), device=self.device) * 0.1 + 0.8
-        fake = torch.rand((batch_size, 1), device=self.device) * 0.1 + 0.1
+        valid = torch.rand((batch_size, 1), device=self.device) * 0.1 + 0.9
+        fake = torch.rand((batch_size, 1), device=self.device) * 0.1
 
         # Discriminator update
         self.opt_g.zero_grad()
@@ -73,7 +73,7 @@ class GAN(pl.LightningModule):
             self.discriminator(self.generator(images, noise)), fake
         )
         loss_d = (real_loss + fake_loss) / 2
-        if self.d_ema_g_ema_diff > -0.4:
+        if self.d_ema_g_ema_diff > -0.15:
             self.manual_backward(loss_d)
             self.opt_d.step()
 
@@ -92,7 +92,7 @@ class GAN(pl.LightningModule):
         loss_g_id_mse = torch.mean((gen_images_id - images) ** 2) * 2
         loss_g_id = loss_g_id_ssim + loss_g_id_mse
         loss_g = loss_g_div + loss_g_id
-        if self.d_ema_g_ema_diff < 0.4:
+        if self.d_ema_g_ema_diff < 0.15:
             self.manual_backward(loss_g)
             self.opt_g.step()
 
