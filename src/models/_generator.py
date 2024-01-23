@@ -155,6 +155,18 @@ class AdaIN(nn.Module):
         return normalized_content * style_scale + style_shift
 
 
+class FiLM(nn.Module):
+    def __init__(self, noise_dim, num_features):
+        super().__init__()
+        self.scale_transform = nn.Linear(noise_dim, num_features)
+        self.shift_transform = nn.Linear(noise_dim, num_features)
+
+    def forward(self, features, noise):
+        scale = self.scale_transform(noise).unsqueeze(-1).unsqueeze(-1)
+        shift = self.shift_transform(noise).unsqueeze(-1).unsqueeze(-1)
+        return scale * features + shift
+
+
 class Generator(nn.Module):
     def __init__(self, device):
         super().__init__()
@@ -187,6 +199,7 @@ class Generator(nn.Module):
             out_indices=[2],  # edgenext_xx_small
         ).to(device)
         self.adain = AdaIN(style_dim=56, content_dim=88).to(device)
+        self.film = FiLM(noise_dim=56, num_features=88).to(device)
 
         # generative module
         self.generative = nn.Sequential(
@@ -233,7 +246,8 @@ class Generator(nn.Module):
         #
 
         # Use AdaIN to merge noise with features
-        merged = self.adain(features, noise)
+        # merged = self.adain(features, noise)
+        merged = self.film(features, noise)
         # merged = torch.cat((features, noise), dim=1)
 
         # compute output image
