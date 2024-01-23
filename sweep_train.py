@@ -6,14 +6,14 @@ from loguru import logger
 from pytorch_lightning.loggers import WandbLogger
 from datetime import datetime
 from src.models import Generator, Discriminator
-from src.data import get_cifar10_dataloader
+from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
 from pytorch_msssim import SSIM
 import torch.nn.functional as F
 from functools import partial
 
 sweep_config = {
     "method": "bayes",
-    "metric": {"name": "loss", "goal": "minimize"},
+    "metric": {"name": "loss_g", "goal": "minimize"},
     "parameters": {
         "lr_gen": {"values": [0.00005, 0.0001, 0.0002, 0.0005]},
         "lr_disc": {"values": [0.00005, 0.0001, 0.0002, 0.0005]},
@@ -268,7 +268,7 @@ def train(config=None):
 
     with wandb.init(
         project="GAN-CIFAR10",
-        name="Sweep-GAN-train-" + session_name,
+        name="Sweep-GAN-train-FILM-edgenet" + session_name,
         settings=wandb.Settings(mode="online"),
         config=config,
     ):
@@ -288,7 +288,7 @@ def train(config=None):
         torch.set_float32_matmul_precision("medium")
 
         trainer = pl.Trainer(
-            max_epochs=150, accelerator="gpu", devices=gpus, logger=wandb_logger
+            max_epochs=300, accelerator="gpu", devices=gpus, logger=wandb_logger
         )
         trainer.fit(model)
 
