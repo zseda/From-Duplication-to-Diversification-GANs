@@ -258,6 +258,6 @@ class Generator(nn.Module):
         # compute output image
         output_img = self.generative(merged)
         # sigmoid_output_img = torch.sigmoid(output_img)
-        transformed_output = torch.tanh(output_img)
+        # transformed_output = torch.tanh(output_img)
 
-        return transformed_output
+        return output_img
