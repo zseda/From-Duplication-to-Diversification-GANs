@@ -73,7 +73,7 @@ class GAN(pl.LightningModule):
             self.discriminator(self.generator(images, noise)), fake
         )
         loss_d = (real_loss + fake_loss) / 2
-        if self.d_ema_g_ema_diff > -0.15:
+        if self.d_ema_g_ema_diff > -0.05:
             self.manual_backward(loss_d)
             self.opt_d.step()
 
@@ -92,7 +92,7 @@ class GAN(pl.LightningModule):
         loss_g_id_mse = torch.mean((gen_images_id - images) ** 2) * 2
         loss_g_id = loss_g_id_ssim + loss_g_id_mse
         loss_g = loss_g_div + loss_g_id
-        if self.d_ema_g_ema_diff < 0.15:
+        if self.d_ema_g_ema_diff < 0.05:
             self.manual_backward(loss_g)
             self.opt_g.step()
 
@@ -176,7 +176,7 @@ session_name = current_time.strftime("%Y-%m-%d_%H-%M-%S")
 # Weights & Biases setup for online-only logging
 wandb.init(
     project="GAN-CIFAR10",
-    name="GAN-EMA-SSIM-0.15-ADAIN" + session_name,
+    name="GAN-EMA-SSIM-0.05-FILM" + session_name,
     settings=wandb.Settings(mode="online"),
 )
 
