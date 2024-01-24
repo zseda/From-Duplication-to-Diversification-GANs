@@ -203,10 +203,10 @@ class Generator(nn.Module):
             features_only=True,
             # TODO: test diffrent output indices for feature extraction
             # out_indices=[3], # efficientnet b0
-            out_indices=[1],  # edgenext_xx_small
+            out_indices=[2],  # edgenext_xx_small
         ).to(device)
         # self.adain = AdaIN(style_dim=56, content_dim=88).to(device)
-        self.film = FiLM(noise_dim=56, num_features=48).to(device)
+        # self.film = FiLM(noise_dim=56, num_features=88).to(device)
 
         # generative module
         self.generative = nn.Sequential(
@@ -226,7 +226,7 @@ class Generator(nn.Module):
             nn.UpsamplingBilinear2d(scale_factor=2),
             # 16x16
             CustomStackedDecodeModule(in_channels=16, out_channels=16),
-            # nn.UpsamplingBilinear2d(scale_factor=2),
+            nn.UpsamplingBilinear2d(scale_factor=2),
             CustomStackedDecodeModule(in_channels=16, out_channels=8),
             nn.Conv2d(
                 in_channels=8,
@@ -252,8 +252,8 @@ class Generator(nn.Module):
         #
         # Use AdaIN to merge noise with features
         # merged = self.adain(features, noise)
-        merged = self.film(features, noise)
-        # merged = torch.cat((features, noise), dim=1)
+        # merged = self.film(features, noise)
+        merged = torch.cat((features, noise), dim=1)
 
         # compute output image
         output_img = self.generative(merged)
