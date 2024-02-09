@@ -190,6 +190,41 @@ class GAN(pl.LightningModule):
         logger.info("Loading training data...")
         return get_cifar10_dataloader(target_class=4, batch_size=128, num_workers=8)[0]
 
+    def on_fit_end(self):
+        # Prepare the model for export
+        self.generator.eval()
+
+        # Create a dummy input tensor that matches the input shape your model expects
+        # Assuming the generator expects a batch of images and a noise vector
+        dummy_images = torch.randn(1, 3, 32, 32, requires_grad=False).to(
+            self.device
+        )  # CIFAR-10 image size
+        dummy_noise = torch.randn(1, 56, 2, 2, requires_grad=False).to(
+            self.device
+        )  # Adjust based on your noise input size
+
+        # Set the file path for the ONNX model
+        onnx_file_path = "generator_last_epoch.onnx"
+
+        # Export the model; this assumes the generator is the model you want to export
+        torch.onnx.export(
+            self.generator,  # Model being run
+            (dummy_images, dummy_noise),  # Model input (or a tuple for multiple inputs)
+            onnx_file_path,  # Where to save the model
+            export_params=True,  # Store the trained parameter weights inside the model file
+            opset_version=11,  # The ONNX version to export the model to
+            do_constant_folding=True,  # Whether to execute constant folding for optimization
+            input_names=["input_image", "input_noise"],  # the model's input names
+            output_names=["output_image"],  # the model's output names
+            dynamic_axes={
+                "input_image": {0: "batch_size"},  # Variable-length axes
+                "input_noise": {0: "batch_size"},
+                "output_image": {0: "batch_size"},
+            },
+        )
+
+        logger.info(f"Model has been converted to ONNX and saved to {onnx_file_path}")
+
 
 current_time = datetime.now()
 session_name = current_time.strftime("%Y-%m-%d_%H-%M-%S")
