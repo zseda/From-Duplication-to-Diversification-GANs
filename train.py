@@ -8,10 +8,6 @@ from datetime import datetime
 from src.models import Generator, Discriminator
 from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
-import typer
-
-# Initialize Typer app
-app = typer.Typer()
 
 
 # TODO: try different weight init methods
@@ -230,55 +226,23 @@ class GAN(pl.LightningModule):
         logger.info(f"Model has been converted to ONNX and saved to {onnx_file_path}")
 
 
-@app.command()
-def train(
-    max_epochs: int = typer.Option(500, help="Number of epochs to train for."),
-    target_class: int = typer.Option(4, help="Target class for the CIFAR10 dataset."),
-    accelerator: str = typer.Option(
-        "gpu", help="Which accelerator to use ('gpu' or 'cpu')."
-    ),
-    batch_size: int = typer.Option(64, help="Batch size for training."),
-):
-    # Initialize Weights & Biases
-    current_time = datetime.now()
-    session_name = current_time.strftime("%Y-%m-%d_%H-%M-%S")
-    wandb.init(
-        project="GAN-CIFAR10",
-        name="Basic-GAN-train-" + session_name,
-        settings=wandb.Settings(mode="online"),
-    )
-    wandb_logger = WandbLogger()
+current_time = datetime.now()
+session_name = current_time.strftime("%Y-%m-%d_%H-%M-%S")
+# Weights & Biases setup for online-only logging
+wandb.init(
+    project="GAN-CIFAR10",
+    name="Basic-GAN-train-" + session_name,
+    settings=wandb.Settings(mode="online"),
+)
 
-    # Determine the number of devices based on the accelerator type
-    devices = 1 if accelerator == "gpu" and torch.cuda.is_available() else None
+wandb_logger = WandbLogger()
+gpus = 1 if torch.cuda.is_available() else 0
+# start training
+logger.info("Starting training...")
+torch.set_float32_matmul_precision("medium")  # or 'high' based on your precision needs
+trainer = pl.Trainer(max_epochs=150, accelerator="gpu", devices=1, logger=wandb_logger)
+gan = GAN()
+trainer.fit(gan)
 
-    # Initialize the GAN model with any modifications needed
-    gan = GAN(
-        target_class=target_class
-    )  # Modify the GAN __init__ method to accept target_class
-
-    # Modify the GAN's dataloader method to use the provided batch size
-    gan.train_dataloader = lambda: get_cifar10_dataloader(
-        target_class=target_class, batch_size=batch_size, num_workers=8
-    )[0]
-
-    # Initialize the Trainer with the given parameters
-    trainer = pl.Trainer(
-        max_epochs=max_epochs,
-        accelerator=accelerator,
-        devices=devices,
-        logger=wandb_logger,
-    )
-
-    # Start training
-    logger.info("Starting training...")
-    trainer.fit(gan)
-
-    # Finish the Weights & Biases session
-    wandb.finish()
-    logger.info("Finished training!")
-
-
-# Entry point for the script
-if __name__ == "__main__":
-    app()
+wandb.finish()
+logger.info("Finished training!")
