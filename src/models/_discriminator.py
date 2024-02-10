@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import timm
 
-from _generator import StackedDecodingModule
+from ._generator import StackedDecodingModule
 
 
 class Discriminator(nn.Module):
@@ -37,8 +37,9 @@ class DiscriminatorCustom(nn.Module):
             StackedDecodingModule(128, 256, norm_layer=nn.BatchNorm2d),
             nn.MaxPool2d(kernel_size=2, stride=2),  # 8x8
             StackedDecodingModule(256, 512, norm_layer=nn.BatchNorm2d),
-            StackedDecodingModule(512, 1024, norm_layer=nn.BatchNorm2d),
-            nn.Conv2d(1024, 1, kernel_size=1, padding=0),
+            StackedDecodingModule(512, 256, norm_layer=nn.BatchNorm2d),
+            nn.Flatten(),
+            nn.Linear(256 * 8 * 8, 1),
         )
 
     def forward(self, x):
