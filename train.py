@@ -8,6 +8,9 @@ from datetime import datetime
 from src.models import Generator, DiscriminatorCustom as Discriminator
 from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
+from typer import Typer, Option
+
+app = Typer()
 
 
 # TODO: try different weight init methods
@@ -226,23 +229,50 @@ class GAN(pl.LightningModule):
         logger.info(f"Model has been converted to ONNX and saved to {onnx_file_path}")
 
 
-current_time = datetime.now()
-session_name = current_time.strftime("%Y-%m-%d_%H-%M-%S")
-# Weights & Biases setup for online-only logging
-wandb.init(
-    project="GAN-CIFAR10",
-    name="Basic-GAN-train-" + session_name,
-    settings=wandb.Settings(mode="online"),
-)
+@app.command()
+def train(
+    max_epochs: int = Option(500, help="Number of epochs for training"),
+    wandb_run_name: str = Option("GAN-EMA015-SSIM-LeastSquare", help="WandB run name"),
+):
+    current_time = datetime.now()
+    session_name = current_time.strftime("%Y-%m-%d_%H-%M-%S")
+    full_wandb_run_name = f"{wandb_run_name}-{session_name}"
 
-wandb_logger = WandbLogger()
-gpus = 1 if torch.cuda.is_available() else 0
-# start training
-logger.info("Starting training...")
-torch.set_float32_matmul_precision("medium")  # or 'high' based on your precision needs
-trainer = pl.Trainer(max_epochs=500, accelerator="gpu", devices=1, logger=wandb_logger)
-gan = GAN()
-trainer.fit(gan)
+    # Weights & Biases setup for online-only logging
+    wandb.init(
+        project="GAN-CIFAR10",
+        name=full_wandb_run_name,
+        settings=wandb.Settings(mode="online"),
+    )
 
-wandb.finish()
-logger.info("Finished training!")
+    wandb_logger = WandbLogger()
+
+    # Check for GPU availability
+    gpus = 1 if torch.cuda.is_available() else 0
+
+    logger.info("Starting training...")
+
+    # Set torch's float32 matmul precision if needed
+    torch.set_float32_matmul_precision(
+        "high"
+    )  # or 'high' based on your precision needs
+
+    # Initialize the Trainer with the provided max_epochs
+    trainer = pl.Trainer(
+        max_epochs=max_epochs, accelerator="gpu", devices=gpus, logger=wandb_logger
+    )
+
+    # Initialize your GAN model
+    gan = GAN()
+
+    # Start the training process
+    trainer.fit(gan)
+
+    # Finish the wandb run
+    wandb.finish()
+
+    logger.info("Finished training!")
+
+
+if __name__ == "__main__":
+    app()
