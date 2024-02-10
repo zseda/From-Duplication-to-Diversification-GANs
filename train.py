@@ -5,7 +5,7 @@ import wandb
 from loguru import logger
 from pytorch_lightning.loggers import WandbLogger
 from datetime import datetime
-from src.models import Generator, Discriminator
+from src.models import Generator, DiscriminatorCustom as Discriminator
 from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
 
