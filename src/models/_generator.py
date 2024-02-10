@@ -205,7 +205,7 @@ class Generator(nn.Module):
             # out_indices=[3], # efficientnet b0
             out_indices=[2],  # edgenext_xx_small
         ).to(device)
-        # self.adain = AdaIN(style_dim=56, content_dim=88).to(device)
+        self.adain = AdaIN(style_dim=56, content_dim=88).to(device)
         # self.film = FiLM(noise_dim=56, num_features=88).to(device)
 
         # generative module
