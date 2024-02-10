@@ -83,7 +83,7 @@ class GAN(pl.LightningModule):
         real_loss = self.criterion_D(
             self.discriminator(images), torch.ones_like(self.discriminator(images))
         )
-        fake_loss = self.criterion_d(
+        fake_loss = self.criterion_D(
             self.discriminator(self.generator(images, noise)),
             torch.zeros_like(self.discriminator(self.generator(images, noise))),
         )
