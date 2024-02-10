@@ -9,6 +9,7 @@ from src.models import Generator, DiscriminatorCustom as Discriminator
 from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
 from typer import Typer, Option
+from pathlib import Path
 
 app = Typer()
 
@@ -193,40 +194,33 @@ class GAN(pl.LightningModule):
         logger.info("Loading training data...")
         return get_cifar10_dataloader(target_class=4, batch_size=128, num_workers=8)[0]
 
-    def on_fit_end(self):
-        # Prepare the model for export
-        self.generator.eval()
+    def save_model_as_onnx(self, epoch, run_dir):
+        # Ensure run_dir is a Path object
+        run_dir = Path(run_dir)
 
         # Create a dummy input tensor that matches the input shape your model expects
-        # Assuming the generator expects a batch of images and a noise vector
-        dummy_images = torch.randn(1, 3, 32, 32, requires_grad=False).to(
-            self.device
-        )  # CIFAR-10 image size
-        dummy_noise = torch.randn(1, 56, 2, 2, requires_grad=False).to(
-            self.device
-        )  # Adjust based on your noise input size
+        dummy_images = torch.randn(1, 3, 32, 32, requires_grad=False).to(self.device)
+        dummy_noise = torch.randn(1, 56, 2, 2, requires_grad=False).to(self.device)
 
-        # Set the file path for the ONNX model
-        onnx_file_path = "generator_last_epoch.onnx"
+        # Set the file path for the ONNX model, including the epoch number, using pathlib
+        onnx_file_path = run_dir / f"generator_epoch_{epoch}.onnx"
 
-        # Export the model; this assumes the generator is the model you want to export
+        # Export the model
         torch.onnx.export(
-            self.generator,  # Model being run
-            (dummy_images, dummy_noise),  # Model input (or a tuple for multiple inputs)
-            onnx_file_path,  # Where to save the model
-            export_params=True,  # Store the trained parameter weights inside the model file
-            opset_version=11,  # The ONNX version to export the model to
-            do_constant_folding=True,  # Whether to execute constant folding for optimization
-            input_names=["input_image", "input_noise"],  # the model's input names
-            output_names=["output_image"],  # the model's output names
-            dynamic_axes={
-                "input_image": {0: "batch_size"},  # Variable-length axes
-                "input_noise": {0: "batch_size"},
-                "output_image": {0: "batch_size"},
-            },
+            self.generator, (dummy_images, dummy_noise), onnx_file_path, ...
+        )
+        logger.info(
+            f"Model at epoch {epoch} has been converted to ONNX and saved to {onnx_file_path}"
         )
 
-        logger.info(f"Model has been converted to ONNX and saved to {onnx_file_path}")
+    def on_epoch_end(self, run_dir):
+        # Get the current epoch
+        current_epoch = self.current_epoch
+
+        # Check if the current epoch is a multiple of 50
+        if (current_epoch + 1) % 50 == 0:
+            # Call the method to save the model as ONNX
+            self.save_model_as_onnx(current_epoch + 1, run_dir)
 
 
 @app.command()
@@ -237,6 +231,9 @@ def train(
     current_time = datetime.now()
     session_name = current_time.strftime("%Y-%m-%d_%H-%M-%S")
     full_wandb_run_name = f"{wandb_run_name}-{session_name}"
+    # Create a directory for this run using pathlib
+    run_dir = Path(f"./runs/{full_wandb_run_name}")
+    run_dir.mkdir(parents=True, exist_ok=True)
 
     # Weights & Biases setup for online-only logging
     wandb.init(
