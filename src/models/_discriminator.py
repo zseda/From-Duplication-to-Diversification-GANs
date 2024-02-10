@@ -30,17 +30,14 @@ class DiscriminatorCustom(nn.Module):
         super().__init__()
 
         self.pipeline = nn.Sequential(
-            StackedDecodingModule(3, 16, norm_layer=nn.BatchNorm2d),  # Reduced channels
-            StackedDecodingModule(16, 32, norm_layer=nn.BatchNorm2d),
-            nn.MaxPool2d(kernel_size=2, stride=2),  # Apply pooling earlier
+            StackedDecodingModule(3, 32, norm_layer=nn.BatchNorm2d),  # Reduced channels
             StackedDecodingModule(32, 64, norm_layer=nn.BatchNorm2d),
-            nn.MaxPool2d(kernel_size=2, stride=2),  # Apply additional pooling
+            nn.MaxPool2d(kernel_size=2, stride=2),  # Apply pooling earlier
             StackedDecodingModule(64, 128, norm_layer=nn.BatchNorm2d),
             nn.MaxPool2d(kernel_size=2, stride=2),  # Apply additional pooling
-            StackedDecodingModule(
-                128, 64, norm_layer=nn.BatchNorm2d
-            ),  # Reduced channels
-            nn.Flatten(),
+            StackedDecodingModule(128, 256, norm_layer=nn.BatchNorm2d),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # Apply additional pooling
+            StackedDecodingModule(256, 128, norm_layer=nn.BatchNorm2d),
             nn.Linear(64 * 4 * 4, 1),  # Reduced input size due to additional pooling
         )
 
