@@ -13,11 +13,11 @@ class Discriminator(nn.Module):
             # "efficientnet_b1", pretrained=False, num_classes=1
             "edgenext_xx_small",
             pretrained=False,
-            num_classes=1
+            num_classes=1,
             # "eca_nfnet_l0", pretrained=False, num_classes=1
         )
 
     def forward(self, x):
         x = self.base_model(x)
-        # x = torch.sigmoid(x)
+        x = torch.sigmoid(x)
         return x
