@@ -43,7 +43,7 @@ class GAN(pl.LightningModule):
         self.d_ema_g_ema_diff = 0
 
         self.criterion = torch.nn.BCELoss()
-        self.criterion = torch.nn.MSELoss()
+        # self.criterion = torch.nn.MSELoss()
         self.ssim = SSIM(data_range=1.0, size_average=True, channel=3)
         self.sample_val_images = None
 

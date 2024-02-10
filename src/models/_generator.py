@@ -250,10 +250,11 @@ class Generator(nn.Module):
         # => merging at dim=1 means concat at channel dim => (b, c, h, w)
         # TODO: check out adaptive instance normalization
         #
+
         # Use AdaIN to merge noise with features
-        # merged = self.adain(features, noise)
+        merged = self.adain(features, noise)
         # merged = self.film(features, noise)
-        merged = torch.cat((features, noise), dim=1)
+        # merged = torch.cat((features, noise), dim=1)
 
         # compute output image
         output_img = self.generative(merged)
