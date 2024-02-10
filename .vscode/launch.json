@@ -6,6 +6,14 @@
     "configurations": [
 
 
+   {
+            "name": "Test Discriminator",
+            "type": "python",
+            "request": "launch",
+            "program": "test_discriminator.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
         {
             "name": "Test Generator",
             "type": "python",
