@@ -58,21 +58,19 @@ class GAN(LightningModule):
         batch_size = real_imgs.size(0)
 
         # Generator update
-        self.generator.zero_grad()
-        z = torch.randn(batch_size, self.latent_dim, device=self.device)
-        generated_imgs = self(z)  # Generate images
+        self.opt_g.zero_grad()
+        self.opt_d.zero_grad()
+
         g_loss = self.adversarial_loss(
             self.discriminator(generated_imgs),
             torch.ones(batch_size, 1, device=self.device),
         )
         self.manual_backward(g_loss)
-        self.optimizers()[0].step()
-
-        # Store generator loss for logging
-        self.g_loss = g_loss
+        self.opt_g.step()
 
         # Discriminator update
-        self.discriminator.zero_grad()
+        self.opt_d.zero_grad()
+        self.opt_g.zero_grad()
         real_loss = self.adversarial_loss(
             self.discriminator(real_imgs), torch.ones(batch_size, 1, device=self.device)
         )
@@ -82,19 +80,15 @@ class GAN(LightningModule):
         )
         d_loss = (real_loss + fake_loss) / 2
         self.manual_backward(d_loss)
-        self.optimizers()[1].step()
-
-        # Store discriminator losses for logging
-        self.d_fake_loss = fake_loss
-        self.d_real_loss = real_loss
+        self.opt_d().step()
 
         if batch_idx % 50 == 0:
             # Log losses
             self.logger.experiment.log(
                 {
-                    "losses/d_fake": self.d_fake_loss.item(),
-                    "losses/d_real": self.d_real_loss.item(),
-                    "losses/g": self.g_loss.item(),
+                    "losses/d_fake": fake_loss,
+                    "losses/d_real": real_loss,
+                    "losses/g": g_loss,
                 }
             )
 
@@ -123,14 +117,17 @@ class GAN(LightningModule):
         b2 = 0.999
         opt_g = optim.Adam(self.generator.parameters(), lr=lr, betas=(b1, b2))
         opt_d = optim.Adam(self.discriminator.parameters(), lr=lr, betas=(b1, b2))
-        return [opt_g, opt_d]
+        # Get both optimizers
+        self.opt_g = opt_g
+        self.opt_d = opt_d
+        return opt_d, opt_g
 
 
 # Assuming get_cifar10_dataloader is defined and returns a DataLoader
 dataloader = get_cifar10_dataloader(batch_size=128, num_workers=8)[0]
 
 
-wandb_logger = WandbLogger(project="your_project_name", log_model="all")
+wandb_logger = WandbLogger(project="Vanilla-GAN", log_model="all")
 
 # Initialize the GAN module with your generator and discriminator
 model = GAN(VanillaGenerator(), VanillaDiscriminator())
