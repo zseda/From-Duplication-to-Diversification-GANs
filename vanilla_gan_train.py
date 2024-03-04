@@ -1,5 +1,6 @@
 import torch
 import os
+import torchvision
 import random
 import numpy as np
 import torch.nn as nn
@@ -61,6 +62,8 @@ class GAN(LightningModule):
         self.opt_g.zero_grad()
         self.opt_d.zero_grad()
 
+        generated_imgs = self.generator(real_imgs)
+
         g_loss = self.adversarial_loss(
             self.discriminator(generated_imgs),
             torch.ones(batch_size, 1, device=self.device),
@@ -91,23 +94,25 @@ class GAN(LightningModule):
                     "losses/g": g_loss,
                 }
             )
-
+        # Log generated images
         if batch_idx % 250 == 0:
             with torch.no_grad():
-                # Generate images for logging
-                generated_imgs = self(self.validation_z.to(self.device))
-                img_grid_fake = make_grid(generated_imgs, normalize=True)
-                img_grid_real = make_grid(batch[0], normalize=True)
-
-                # Log generated and real images
+                # Log generated images
+                img_grid = torchvision.utils.make_grid(generated_imgs, normalize=True)
                 self.logger.experiment.log(
                     {
                         "images/generated": [
-                            wandb.Image(img_grid_fake, caption="Generated Images")
-                        ],
+                            wandb.Image(img_grid, caption="Generated Images")
+                        ]
+                    }
+                )
+                # Log real images
+                img_grid_real = torchvision.utils.make_grid(real_imgs, normalize=True)
+                self.logger.experiment.log(
+                    {
                         "images/real": [
-                            wandb.Image(img_grid_real, caption="Real Images")
-                        ],
+                            wandb.Image(img_grid_real, caption="Generated Images")
+                        ]
                     }
                 )
 
