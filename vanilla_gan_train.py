@@ -14,6 +14,7 @@ from loguru import logger
 from src.data import get_cifar10_dataloader
 import wandb
 from datetime import datetime
+from pathlib import Path
 from src.models import (
     VanillaGenerator,
     VanillaDiscriminator,
@@ -41,7 +42,7 @@ class GAN(LightningModule):
         self.generator = generator
         self.discriminator = discriminator
         self.latent_dim = latent_dim
-        self.validation_z = torch.randn(8, latent_dim)
+        self.register_buffer("validation_z", torch.randn(8, latent_dim))
         self.automatic_optimization = False
         self.save_hyperparameters()
 
@@ -52,38 +53,34 @@ class GAN(LightningModule):
         return nn.BCELoss()(y_hat, y)
 
     def training_step(self, batch, batch_idx):
-        real_imgs, _ = batch  # This should unpack the batch into images and labels
-        # Check if real_imgs is a list and convert it to a tensor
+        real_imgs, _ = batch
         real_imgs = real_imgs.to(self.device)
-
         batch_size = real_imgs.size(0)
 
-        # Generator update
+        # Generate noise
+        z = torch.randn(batch_size, self.latent_dim, device=self.device)
+        fake_imgs = self.generator(z)
+
+        # Train Generator
         self.opt_g.zero_grad()
-        self.opt_d.zero_grad()
-
-        generated_imgs = self.generator(real_imgs)
-
         g_loss = self.adversarial_loss(
-            self.discriminator(generated_imgs),
-            torch.ones(batch_size, 1, device=self.device),
+            self.discriminator(fake_imgs), torch.ones(batch_size, 1, device=self.device)
         )
         self.manual_backward(g_loss)
         self.opt_g.step()
 
-        # Discriminator update
+        # Train Discriminator
         self.opt_d.zero_grad()
-        self.opt_g.zero_grad()
         real_loss = self.adversarial_loss(
             self.discriminator(real_imgs), torch.ones(batch_size, 1, device=self.device)
         )
         fake_loss = self.adversarial_loss(
-            self.discriminator(generated_imgs.detach()),
+            self.discriminator(fake_imgs.detach()),
             torch.zeros(batch_size, 1, device=self.device),
         )
         d_loss = (real_loss + fake_loss) / 2
         self.manual_backward(d_loss)
-        self.opt_d().step()
+        self.opt_d.step()
 
         if batch_idx % 50 == 0:
             # Log losses
@@ -98,7 +95,7 @@ class GAN(LightningModule):
         if batch_idx % 250 == 0:
             with torch.no_grad():
                 # Log generated images
-                img_grid = torchvision.utils.make_grid(generated_imgs, normalize=True)
+                img_grid = torchvision.utils.make_grid(fake_imgs, normalize=True)
                 self.logger.experiment.log(
                     {
                         "images/generated": [
@@ -137,9 +134,16 @@ wandb_logger = WandbLogger(project="Vanilla-GAN", log_model="all")
 # Initialize the GAN module with your generator and discriminator
 model = GAN(VanillaGenerator(), VanillaDiscriminator())
 
+# Define the directory path for model checkpoints
+checkpoint_dir = Path("./model_checkpoints/")
+
+# Create the directory if it does not exist
+checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+
 # Initialize ModelCheckpoint callback to save the last model
 checkpoint_callback = ModelCheckpoint(
-    dirpath="./model_checkpoints/",
+    dirpath=checkpoint_dir,
     filename="Vanilla-GAN-{epoch:02d}",
     save_top_k=-1,  # Save all models
     every_n_epochs=25,  # Save every epoch
