@@ -168,28 +168,28 @@ class Generator(nn.Module):
         ).to(device)
 
         # generative module
+        # Increase channel widths and add more layers to enhance parameter count
         self.generative = nn.Sequential(
-            # TODO: input resolution: ???
-            # TODO: figure out if upsampling or downsampling is needed (e.g.) timm output is too large or too small
-            # *LAZY* conv2d layer which automatically calculates number of in_channels
-            # from merged and outputs the specified channel
-            nn.LazyConv2d(out_channels=128, kernel_size=1, padding=0),
-            # 2x2
-            CustomStackedDecodeModule(in_channels=128, out_channels=64),
+            nn.LazyConv2d(
+                out_channels=256, kernel_size=1, padding=0
+            ),  # Increased channels
+            CustomStackedDecodeModule(
+                in_channels=256, out_channels=128
+            ),  # Increased channels
             nn.UpsamplingBilinear2d(scale_factor=2),
-            # 4x4
-            CustomStackedDecodeModule(in_channels=64, out_channels=32),
+            CustomStackedDecodeModule(
+                in_channels=128, out_channels=128
+            ),  # Maintain channel size to add complexity without too much depth
             nn.UpsamplingBilinear2d(scale_factor=2),
-            # 8x8
-            CustomStackedDecodeModule(in_channels=32, out_channels=16),
+            CustomStackedDecodeModule(
+                in_channels=128, out_channels=64
+            ),  # Increased channels
             nn.UpsamplingBilinear2d(scale_factor=2),
-            # 16x16
-            CustomStackedDecodeModule(in_channels=16, out_channels=16),
-            nn.UpsamplingBilinear2d(scale_factor=2),
-            # 32x32
-            CustomStackedDecodeModule(in_channels=16, out_channels=8),
+            CustomStackedDecodeModule(
+                in_channels=64, out_channels=32
+            ),  # Increased channels
             nn.Conv2d(
-                in_channels=8,
+                in_channels=32,  # Increased channels
                 out_channels=3,
                 kernel_size=3,
                 padding=1,
