@@ -8,6 +8,24 @@ from datetime import datetime
 from src.models import Generator, Discriminator
 from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
+import os
+import random
+import numpy as np
+
+
+# Function to set random seeds
+def set_random_seeds(seed_value=42):
+    random.seed(seed_value)  # Python random module
+    np.random.seed(seed_value)  # Numpy module
+    torch.manual_seed(seed_value)  # PyTorch
+    torch.cuda.manual_seed_all(seed_value)  # for multi-GPU
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    os.environ["PYTHONHASHSEED"] = str(seed_value)
+
+
+# Set random seeds for reproducibility
+set_random_seeds(seed_value=42)
 
 
 # TODO: try different weight init methods
