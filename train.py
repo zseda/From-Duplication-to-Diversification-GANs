@@ -11,6 +11,7 @@ from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
 import os
 import random
 import numpy as np
+from pathlib import Path
 
 
 # Function to set random seeds
@@ -195,6 +196,16 @@ class GAN(pl.LightningModule):
         self.checkpoint_dir = Path("./model_checkpoints/", self.custom_experiment_id)
         # Create the directory if it does not exist
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+    def on_train_epoch_end(self) -> None:
+        if self.trainer.current_epoch % 25 == 0:
+            # save PyTorch
+            torch.save(
+                self.generator.state_dict(),
+                Path(
+                    self.checkpoint_dir, f"generator_{self.trainer.current_epoch}.pt"
+                ).as_posix(),
+            )
 
 
 current_time = datetime.now()
