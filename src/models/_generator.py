@@ -252,9 +252,9 @@ class Generator(nn.Module):
         #
 
         # Use AdaIN to merge noise with features
-        merged = self.adain(features, noise)
+        # merged = self.adain(features, noise)
         # merged = self.film(features, noise)
-        # merged = torch.cat((features, noise), dim=1)
+        merged = torch.cat((features, noise), dim=1)
 
         # compute output image
         output_img = self.generative(merged)
