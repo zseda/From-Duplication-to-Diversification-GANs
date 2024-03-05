@@ -194,6 +194,23 @@ class GAN(pl.LightningModule):
         logger.info("Loading training data...")
         return get_cifar10_dataloader(target_class=4, batch_size=128, num_workers=8)[0]
 
+    def on_train_start(self) -> None:
+        self.custom_experiment_id = self.trainer.logger.experiment.id
+        # Define the directory path for model checkpoints
+        self.checkpoint_dir = Path("./model_checkpoints/", self.custom_experiment_id)
+        # Create the directory if it does not exist
+        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+    def on_train_epoch_end(self) -> None:
+        if self.trainer.current_epoch % 25 == 0:
+            # save PyTorch
+            torch.save(
+                self.generator.state_dict(),
+                Path(
+                    self.checkpoint_dir, f"generator_{self.trainer.current_epoch}.pt"
+                ).as_posix(),
+            )
+
 
 @app.command()
 def train(max_epochs: int = 200, wandb_run_name: str = "GAN-EMA-SSIM015-epoch500"):
@@ -209,15 +226,6 @@ def train(max_epochs: int = 200, wandb_run_name: str = "GAN-EMA-SSIM015-epoch500
     )
 
     wandb_logger = WandbLogger()
-    checkpoint_dir = Path("./model_checkpoints/")
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    checkpoint_callback = ModelCheckpoint(
-        dirpath=str(checkpoint_dir),  # Ensure the path is correctly passed as a string
-        filename="customGAN-EMA-SSIM015-{epoch:02d}",
-        save_top_k=-1,
-        every_n_epochs=25,
-        verbose=True,
-    )
 
     # Check for GPU availability
     gpus = 1 if torch.cuda.is_available() else 0
@@ -233,7 +241,6 @@ def train(max_epochs: int = 200, wandb_run_name: str = "GAN-EMA-SSIM015-epoch500
     trainer = pl.Trainer(
         max_epochs=max_epochs,
         accelerator="gpu",
-        callbacks=[checkpoint_callback],
         devices=gpus,
         logger=wandb_logger,
     )
