@@ -196,7 +196,7 @@ session_name = current_time.strftime("%Y-%m-%d_%H-%M-%S")
 # Weights & Biases setup for online-only logging
 wandb.init(
     project="GAN-CIFAR10",
-    name="Basic-GAN-train-" + session_name,
+    name="LeastSquare-GAN-train-" + session_name,
     settings=wandb.Settings(mode="online"),
 )
 
