@@ -8,14 +8,9 @@ from datetime import datetime
 from src.models import Generator2 as Generator, Discriminator
 from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
-from pytorch_lightning.callbacks import ModelCheckpoint
-from pathlib import Path
+import os
 import random
 import numpy as np
-import os
-import typer
-
-app = typer.Typer()
 
 
 # Function to set random seeds
