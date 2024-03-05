@@ -201,15 +201,15 @@ class GAN(pl.LightningModule):
         # Create the directory if it does not exist
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-    def on_train_epoch_end(self) -> None:
-        if self.trainer.current_epoch % 25 == 0:
-            # save PyTorch
-            torch.save(
-                self.generator.state_dict(),
-                Path(
-                    self.checkpoint_dir, f"generator_{self.trainer.current_epoch}.pt"
-                ).as_posix(),
-            )
+
+current_time = datetime.now()
+session_name = current_time.strftime("%Y-%m-%d_%H-%M-%S")
+# Weights & Biases setup for online-only logging
+wandb.init(
+    project="GAN-CIFAR10",
+    name="LeastSquare-GAN-train-" + session_name,
+    settings=wandb.Settings(mode="online"),
+)
 
 
 @app.command()
