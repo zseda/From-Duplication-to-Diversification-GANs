@@ -8,6 +8,8 @@ from datetime import datetime
 from src.models import Generator, Discriminator
 from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
+from pytorch_lightning.callbacks import ModelCheckpoint
+from pathlib import Path
 import typer
 
 app = typer.Typer()
@@ -176,7 +178,7 @@ class GAN(pl.LightningModule):
 
 
 @app.command()
-def train(max_epochs: int = 500, wandb_run_name: str = "GAN-EMA-SSIM015-epoch500"):
+def train(max_epochs: int = 200, wandb_run_name: str = "GAN-EMA-SSIM015-epoch500"):
     current_time = datetime.now()
     session_name = current_time.strftime("%Y-%m-%d_%H-%M-%S")
     full_wandb_run_name = f"{wandb_run_name}-{session_name}"
@@ -189,7 +191,16 @@ def train(max_epochs: int = 500, wandb_run_name: str = "GAN-EMA-SSIM015-epoch500
     )
 
     wandb_logger = WandbLogger()
+    checkpoint_dir = Path("./model_checkpoints/").mkdir(parents=True, exist_ok=True)
 
+    # Initialize ModelCheckpoint callback to save the last model
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=checkpoint_dir,
+        filename="-customGAN-EMA-SSIM015-{epoch:02d}",
+        save_top_k=-1,  # Save all models
+        every_n_epochs=25,  # Save every epoch
+        verbose=True,
+    )
     # Check for GPU availability
     gpus = 1 if torch.cuda.is_available() else 0
 
@@ -202,7 +213,11 @@ def train(max_epochs: int = 500, wandb_run_name: str = "GAN-EMA-SSIM015-epoch500
 
     # Initialize the Trainer with the provided max_epochs
     trainer = pl.Trainer(
-        max_epochs=max_epochs, accelerator="gpu", devices=gpus, logger=wandb_logger
+        max_epochs=max_epochs,
+        accelerator="gpu",
+        callbacks=[checkpoint_callback],
+        devices=gpus,
+        logger=wandb_logger,
     )
 
     # Initialize your GAN model
