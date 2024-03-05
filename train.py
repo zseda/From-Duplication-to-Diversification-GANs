@@ -209,16 +209,16 @@ def train(max_epochs: int = 200, wandb_run_name: str = "GAN-EMA-SSIM015-epoch500
     )
 
     wandb_logger = WandbLogger()
-    checkpoint_dir = Path("./model_checkpoints/").mkdir(parents=True, exist_ok=True)
-
-    # Initialize ModelCheckpoint callback to save the last model
+    checkpoint_dir = Path("./model_checkpoints/")
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_callback = ModelCheckpoint(
-        dirpath=checkpoint_dir,
-        filename="-customGAN-EMA-SSIM015-{epoch:02d}",
-        save_top_k=-1,  # Save all models
-        every_n_epochs=25,  # Save every epoch
+        dirpath=str(checkpoint_dir),  # Ensure the path is correctly passed as a string
+        filename="customGAN-EMA-SSIM015-{epoch:02d}",
+        save_top_k=-1,
+        every_n_epochs=25,
         verbose=True,
     )
+
     # Check for GPU availability
     gpus = 1 if torch.cuda.is_available() else 0
 
