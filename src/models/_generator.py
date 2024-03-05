@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import timm
 
 from functools import partial
+from loguru import logger
 
 
 class CustomLayer(nn.Module):
@@ -135,6 +136,44 @@ class StackedDecodingModule(nn.Module):
         return residual
 
 
+class AdaIN(nn.Module):
+    def __init__(self, style_dim, content_dim):
+        super().__init__()
+        # Define layers to learn affine transformation parameters
+        # Adjust style_dim to be style_dim * height * width
+        self.style_scale_transform = nn.Linear(style_dim * 2 * 2, content_dim)
+        self.style_shift_transform = nn.Linear(style_dim * 2 * 2, content_dim)
+
+    def forward(self, content, style):
+        # Flatten the style tensor
+        batch_size = style.size(0)
+        style = style.view(batch_size, -1)
+
+        style_scale = self.style_scale_transform(style).unsqueeze(-1).unsqueeze(-1)
+        style_shift = self.style_shift_transform(style).unsqueeze(-1).unsqueeze(-1)
+        normalized_content = F.instance_norm(content)
+        return normalized_content * style_scale + style_shift
+
+
+class FiLM(nn.Module):
+    def __init__(self, noise_dim, num_features):
+        super().__init__()
+        # Adjust the input dimension of the linear layers
+        self.scale_transform = nn.Linear(noise_dim * 2 * 2, num_features)
+        self.shift_transform = nn.Linear(noise_dim * 2 * 2, num_features)
+
+    def forward(self, features, noise):
+        # Flatten the noise tensor
+        batch_size = noise.size(0)
+        noise = noise.view(
+            batch_size, -1
+        )  # Reshape noise to [batch_size, noise_dim*2*2]
+
+        scale = self.scale_transform(noise).unsqueeze(-1).unsqueeze(-1)
+        shift = self.shift_transform(noise).unsqueeze(-1).unsqueeze(-1)
+        return scale * features + shift
+
+
 class Generator(nn.Module):
     def __init__(self, device):
         super().__init__()
@@ -166,30 +205,31 @@ class Generator(nn.Module):
             # out_indices=[3], # efficientnet b0
             out_indices=[2],  # edgenext_xx_small
         ).to(device)
+        self.adain = AdaIN(style_dim=56, content_dim=88).to(device)
+        # self.film = FiLM(noise_dim=56, num_features=88).to(device)
 
         # generative module
-        # Increase channel widths and add more layers to enhance parameter count
         self.generative = nn.Sequential(
-            nn.LazyConv2d(
-                out_channels=256, kernel_size=1, padding=0
-            ),  # Increased channels
-            CustomStackedDecodeModule(
-                in_channels=256, out_channels=128
-            ),  # Increased channels
+            # TODO: input resolution: ???
+            # TODO: figure out if upsampling or downsampling is needed (e.g.) timm output is too large or too small
+            # *LAZY* conv2d layer which automatically calculates number of in_channels
+            # from merged and outputs the specified channel
+            nn.LazyConv2d(out_channels=128, kernel_size=1, padding=0),
+            # 2x2
+            CustomStackedDecodeModule(in_channels=128, out_channels=64),
             nn.UpsamplingBilinear2d(scale_factor=2),
-            CustomStackedDecodeModule(
-                in_channels=128, out_channels=128
-            ),  # Maintain channel size to add complexity without too much depth
+            # 4x4
+            CustomStackedDecodeModule(in_channels=64, out_channels=32),
             nn.UpsamplingBilinear2d(scale_factor=2),
-            CustomStackedDecodeModule(
-                in_channels=128, out_channels=64
-            ),  # Increased channels
+            # 8x8
+            CustomStackedDecodeModule(in_channels=32, out_channels=16),
             nn.UpsamplingBilinear2d(scale_factor=2),
-            CustomStackedDecodeModule(
-                in_channels=64, out_channels=32
-            ),  # Increased channels
+            # 16x16
+            CustomStackedDecodeModule(in_channels=16, out_channels=16),
+            nn.UpsamplingBilinear2d(scale_factor=2),
+            CustomStackedDecodeModule(in_channels=16, out_channels=8),
             nn.Conv2d(
-                in_channels=32,  # Increased channels
+                in_channels=8,
                 out_channels=3,
                 kernel_size=3,
                 padding=1,
@@ -209,6 +249,11 @@ class Generator(nn.Module):
         # => noise and features need to have *same* dimensions if concatenated
         # => merging at dim=1 means concat at channel dim => (b, c, h, w)
         # TODO: check out adaptive instance normalization
+        #
+
+        # Use AdaIN to merge noise with features
+        # merged = self.adain(features, noise)
+        # merged = self.film(features, noise)
         merged = torch.cat((features, noise), dim=1)
 
         # compute output image
