@@ -1,5 +1,7 @@
 from ._discriminator import Discriminator
+from ._discriminator import DiscriminatorCustom as Discriminator2
 from ._generator import Generator
+from ._generator import Generator as Generator2
 from .model_dcgan import Generator as DCGenerator
 from .model_dcgan import Discriminator as DCDiscriminator
 from .model_dcgan import weights_init_normal
