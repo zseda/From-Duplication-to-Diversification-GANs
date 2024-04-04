@@ -139,32 +139,33 @@ class Generator(nn.Module):
     def __init__(self, device):
         super().__init__()
 
-        # Generative module
+        # CustomDecodeModule = partial(
+        #     DecodingModule,
+        #     # norm_layer=None,
+        #     # norm_layer=nn.InstanceNorm2d,
+        #     norm_layer=nn.BatchNorm2d,
+        #     # norm_layer=nn.LocalResponseNorm,
+        #     activation_function=nn.LeakyReLU,
+        # )
         CustomStackedDecodeModule = partial(
             StackedDecodingModule,
+            # norm_layer=None,
+            # norm_layer=nn.InstanceNorm2d,
             norm_layer=nn.BatchNorm2d,
+            # norm_layer=nn.LocalResponseNorm,
             activation_function=nn.LeakyReLU,
         )
 
         # feature extractor for processing input images
         self.feature_extractor = timm.create_model(
+            # "efficientnet_b0",
             "edgenext_xx_small",
             pretrained=True,
             features_only=True,
             # TODO: test diffrent output indices for feature extraction
+            # out_indices=[3], # efficientnet b0
             out_indices=[2],  # edgenext_xx_small
         ).to(device)
-
-        # Assuming the feature extractor output size is not directly compatible, add a processing layer
-        self.feature_processor = nn.Sequential(
-            nn.Conv2d(
-                256, 128, kernel_size=1
-            ),  # Adjust the in_channels according to the actual feature extractor output
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Upsample(
-                scale_factor=2
-            ),  # Adjust scale_factor to match the dimensions with noise or further processing
-        )
 
         # generative module
         self.generative = nn.Sequential(
@@ -201,20 +202,14 @@ class Generator(nn.Module):
 
     def forward(self, img, noise):
         # extract features from image
-        features = self.feature_extractor(img)[-1]
-        features_processed = self.feature_processor(features)
-        # Ensure noise is of a compatible shape, possibly through an adaptive layer or resizing
-        # This part might require adjustment depending on your noise dimensions and feature map size
-        noise_processed = F.adaptive_avg_pool2d(noise, features_processed.shape[2:])
-
+        features = self.feature_extractor(img)[0]
         # TODO: test the need of subnetwork for noise processing
 
         # merge noise with features
         # => noise and features need to have *same* dimensions if concatenated
         # => merging at dim=1 means concat at channel dim => (b, c, h, w)
         # TODO: check out adaptive instance normalization
-        # Merge processed features and noise
-        merged = torch.cat((features_processed, noise_processed), dim=1)
+        merged = torch.cat((features, noise), dim=1)
 
         # compute output image
         output_img = self.generative(merged)
