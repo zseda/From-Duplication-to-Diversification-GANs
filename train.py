@@ -127,10 +127,6 @@ class GAN(pl.LightningModule):
 
         self.d_ema_g_ema_diff = self.d_ema - (self.g_ema / 2)
 
-        if loss_g < self.best_loss:
-            self.best_loss = loss_g
-            self.best_model_state = self.generator.state_dict()
-
         if batch_idx % 50 == 0:
             with torch.no_grad():
                 # log losses
