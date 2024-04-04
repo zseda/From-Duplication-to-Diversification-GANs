@@ -249,8 +249,7 @@ class Generator(nn.Module):
 
     def get_generative_parameters(self):
         """Returns parameters of the generative module"""
-        # return self.generative.parameters()
-        return [*self.generative.parameters(), *self.noise_transform.parameters()]
+        return self.generative.parameters()
 
     def forward(self, img, noise):
         # extract features from image
