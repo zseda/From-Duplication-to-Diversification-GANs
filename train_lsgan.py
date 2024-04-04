@@ -5,7 +5,7 @@ import wandb
 from loguru import logger
 from pytorch_lightning.loggers import WandbLogger
 from datetime import datetime
-from src.models import Generator2 as Generator, Discriminator
+from src.models import Generator, Discriminator
 from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
 import os
@@ -46,8 +46,8 @@ class GAN(pl.LightningModule):
         # create generator
         self.generator = Generator(self.device).to(self.device)
         # generator dummy call => init lazy layers
-        dummy_noise = torch.rand(size=(2, 56, 2, 2)).to(self.device)
-        dummy_images = torch.rand(size=(2, 3, 32, 32)).to(self.device)
+        dummy_noise = torch.rand(size=(1, 56, 2, 2)).to(self.device)
+        dummy_images = torch.rand(size=(1, 3, 32, 32)).to(self.device)
         self.generator(dummy_images, dummy_noise)
         # initialize weights
         for layer in self.generator.generative.modules():
@@ -61,12 +61,19 @@ class GAN(pl.LightningModule):
         self.d_ema = 0
         self.d_ema_g_ema_diff = 0
 
-        self.criterion = torch.nn.BCELoss()
-        # self.criterion = torch.nn.MSELoss()
+        # self.criterion = torch.nn.BCELoss()
+        # For the discriminator
+        self.criterion_D = lambda output, target: 0.5 * torch.mean(
+            (output - target) ** 2
+        )
+        # For the generator
+        self.criterion_G = lambda output: 0.5 * torch.mean((output - 1) ** 2)
         self.ssim = SSIM(data_range=1.0, size_average=True, channel=3)
         self.sample_val_images = None
 
         self.automatic_optimization = False
+        self.best_loss = float("inf")
+        self.best_model_state = None
 
     def on_epoch_start(self):
         if self.sample_val_images is None:
@@ -80,6 +87,10 @@ class GAN(pl.LightningModule):
         batch_size = images.size(0)
         noise = torch.rand(size=(batch_size, 56, 2, 2)).to(self.device)
 
+        # Move the valid and fake tensors to the same device as the model
+        # valid = torch.ones(batch_size, 1).to(self.device)
+        # fake = torch.zeros(batch_size, 1).to(self.device)
+
         # soft labels
         # TODO: try out more or less randomness
         valid = torch.rand((batch_size, 1), device=self.device) * 0.1 + 0.9
@@ -88,9 +99,12 @@ class GAN(pl.LightningModule):
         # Discriminator update
         self.opt_g.zero_grad()
         self.opt_d.zero_grad()
-        real_loss = self.criterion(self.discriminator(images), valid)
-        fake_loss = self.criterion(
-            self.discriminator(self.generator(images, noise)), fake
+        real_loss = self.criterion_D(
+            self.discriminator(images), torch.ones_like(self.discriminator(images))
+        )
+        fake_loss = self.criterion_D(
+            self.discriminator(self.generator(images, noise)),
+            torch.zeros_like(self.discriminator(self.generator(images, noise))),
         )
         loss_d = (real_loss + fake_loss) / 2
         if self.d_ema_g_ema_diff > -0.15:
@@ -106,7 +120,8 @@ class GAN(pl.LightningModule):
         gen_imgs = self.generator(images, noise)
 
         # TODO: try out no soft-labels for generator (only for discriminator)
-        loss_g_div = self.criterion(self.discriminator(gen_imgs), valid)
+        loss_g_div = self.criterion_G(self.discriminator(gen_imgs))
+        # loss_g_div = self.criterion(self.discriminator(gen_imgs), valid)
         gen_images_id = self.generator(images, torch.zeros_like(noise))
         loss_g_id_ssim = 1 - self.ssim(gen_images_id, images)
         loss_g_id_mse = torch.mean((gen_images_id - images) ** 2) * 2
@@ -120,6 +135,10 @@ class GAN(pl.LightningModule):
         self.g_ema = self.g_ema * 0.9 + loss_g_div.detach().item() * 0.1
 
         self.d_ema_g_ema_diff = self.d_ema - (self.g_ema / 2)
+
+        if loss_g < self.best_loss:
+            self.best_loss = loss_g
+            self.best_model_state = self.generator.state_dict()
 
         if batch_idx % 50 == 0:
             with torch.no_grad():
@@ -226,50 +245,5 @@ trainer = pl.Trainer(max_epochs=201, accelerator="gpu", devices=1, logger=wandb_
 gan = GAN()
 trainer.fit(gan)
 
-@app.command()
-def train(max_epochs: int = 200, wandb_run_name: str = "GAN-EMA-SSIM015-epoch500"):
-    current_time = datetime.now()
-    session_name = current_time.strftime("%Y-%m-%d_%H-%M-%S")
-    full_wandb_run_name = f"{wandb_run_name}-{session_name}"
-
-    # Weights & Biases setup for online-only logging
-    wandb.init(
-        project="GAN-CIFAR10",
-        name=full_wandb_run_name,
-        settings=wandb.Settings(mode="online"),
-    )
-
-    wandb_logger = WandbLogger()
-
-    # Check for GPU availability
-    gpus = 1 if torch.cuda.is_available() else 0
-
-    logger.info("Starting training...")
-
-    # Set torch's float32 matmul precision if needed
-    torch.set_float32_matmul_precision(
-        "high"
-    )  # or 'high' based on your precision needs
-
-    # Initialize the Trainer with the provided max_epochs
-    trainer = pl.Trainer(
-        max_epochs=max_epochs,
-        accelerator="gpu",
-        devices=gpus,
-        logger=wandb_logger,
-    )
-
-    # Initialize your GAN model
-    gan = GAN()
-
-    # Start the training process
-    trainer.fit(gan)
-
-    # Finish the wandb run
-    wandb.finish()
-
-    logger.info("Finished training!")
-
-
-if __name__ == "__main__":
-    app()
+wandb.finish()
+logger.info("Finished training!")
