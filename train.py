@@ -7,11 +7,15 @@ from pytorch_lightning.loggers import WandbLogger
 from datetime import datetime
 from src.models import Generator, Discriminator
 from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
-from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
+from pytorch_msssim import SSIM
 import os
 import random
 import numpy as np
 from pathlib import Path
+import typer
+
+
+app = typer.Typer()
 
 
 # Function to set random seeds
@@ -72,8 +76,6 @@ class GAN(pl.LightningModule):
         self.sample_val_images = None
 
         self.automatic_optimization = False
-        self.best_loss = float("inf")
-        self.best_model_state = None
 
     def on_epoch_start(self):
         if self.sample_val_images is None:
@@ -86,15 +88,6 @@ class GAN(pl.LightningModule):
         images = images.to(self.device)
         batch_size = images.size(0)
         noise = torch.rand(size=(batch_size, 56, 2, 2)).to(self.device)
-
-        # Move the valid and fake tensors to the same device as the model
-        # valid = torch.ones(batch_size, 1).to(self.device)
-        # fake = torch.zeros(batch_size, 1).to(self.device)
-
-        # soft labels
-        # TODO: try out more or less randomness
-        valid = torch.rand((batch_size, 1), device=self.device) * 0.1 + 0.9
-        fake = torch.rand((batch_size, 1), device=self.device) * 0.1
 
         # Discriminator update
         self.opt_g.zero_grad()
@@ -119,9 +112,7 @@ class GAN(pl.LightningModule):
         self.opt_d.zero_grad()
         gen_imgs = self.generator(images, noise)
 
-        # TODO: try out no soft-labels for generator (only for discriminator)
         loss_g_div = self.criterion_G(self.discriminator(gen_imgs))
-        # loss_g_div = self.criterion(self.discriminator(gen_imgs), valid)
         gen_images_id = self.generator(images, torch.zeros_like(noise))
         loss_g_id_ssim = 1 - self.ssim(gen_images_id, images)
         loss_g_id_mse = torch.mean((gen_images_id - images) ** 2) * 2
@@ -227,23 +218,52 @@ class GAN(pl.LightningModule):
             )
 
 
-current_time = datetime.now()
-session_name = current_time.strftime("%Y-%m-%d_%H-%M-%S")
-# Weights & Biases setup for online-only logging
-wandb.init(
-    project="GAN-CIFAR10",
-    name="LeastSquare-GAN-train-" + session_name,
-    settings=wandb.Settings(mode="online"),
-)
+@app.command()
+def train(
+    max_epochs: int = 200, wandb_run_name: str = "LSdeepgan-customdisc-sigmoid-epoch200"
+):
+    current_time = datetime.now()
+    session_name = current_time.strftime("%Y-%m-%d_%H-%M-%S")
+    full_wandb_run_name = f"{wandb_run_name}-{session_name}"
 
-wandb_logger = WandbLogger()
-gpus = 1 if torch.cuda.is_available() else 0
-# start training
-logger.info("Starting training...")
-torch.set_float32_matmul_precision("medium")  # or 'high' based on your precision needs
-trainer = pl.Trainer(max_epochs=201, accelerator="gpu", devices=1, logger=wandb_logger)
-gan = GAN()
-trainer.fit(gan)
+    # Weights & Biases setup for online-only logging
+    wandb.init(
+        project="GAN-CIFAR10",
+        name=full_wandb_run_name,
+        settings=wandb.Settings(mode="online"),
+    )
 
-wandb.finish()
-logger.info("Finished training!")
+    wandb_logger = WandbLogger()
+
+    # Check for GPU availability
+    gpus = 1 if torch.cuda.is_available() else 0
+
+    logger.info("Starting training...")
+
+    # Set torch's float32 matmul precision if needed
+    torch.set_float32_matmul_precision(
+        "high"
+    )  # or 'high' based on your precision needs
+
+    # Initialize the Trainer with the provided max_epochs
+    trainer = pl.Trainer(
+        max_epochs=max_epochs,
+        accelerator="gpu",
+        devices=gpus,
+        logger=wandb_logger,
+    )
+
+    # Initialize your GAN model
+    gan = GAN()
+
+    # Start the training process
+    trainer.fit(gan)
+
+    # Finish the wandb run
+    wandb.finish()
+
+    logger.info("Finished training!")
+
+
+if __name__ == "__main__":
+    app()
