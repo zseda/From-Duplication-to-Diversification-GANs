@@ -7,6 +7,10 @@ from functools import partial
 from loguru import logger
 
 
+def _resize(x, size):
+    return F.interpolate(x, size=size, mode="bilinear", align_corners=True)
+
+
 class CustomLayer(nn.Module):
     def __init__(
         self,
@@ -17,6 +21,16 @@ class CustomLayer(nn.Module):
     ):
         super().__init__()
 
+        self.conv = nn.Conv2d(
+            in_channels=in_channels,
+            # options:encoding, decoding,keep the same
+            # decide the output channel based on your goal
+            # decoding might more sense since we want diversity in the output
+            out_channels=out_channels,
+            kernel_size=3,
+            padding=1,
+        )
+
         match norm_layer:
             case None:
                 self.norm_layer = nn.Identity()
@@ -24,19 +38,14 @@ class CustomLayer(nn.Module):
                 self.norm_layer = norm_layer(out_channels)
             case nn.LocalResponseNorm:
                 self.norm_layer = norm_layer(size=2)
+            case nn.utils.spectral_norm:
+                self.conv = nn.utils.spectral_norm(self.conv)
+                self.norm_layer = nn.Identity()
+                
 
         self.sequential = nn.Sequential(
-            # 1st layer
-            nn.Conv2d(
-                in_channels=in_channels,
-                # options:encoding, decoding,keep the same
-                # decide the output channel based on your goal
-                # decoding might more sense since we want diversity in the output
-                out_channels=out_channels,
-                kernel_size=3,
-                padding=1,
-            ),
             # TODO: Adaptive Instance Normalization
+            self.conv,
             self.norm_layer,
             activation_function(),
         )
@@ -208,25 +217,32 @@ class Generator(nn.Module):
         self.adain = AdaIN(style_dim=56, content_dim=88).to(device)
         # self.film = FiLM(noise_dim=56, num_features=88).to(device)
 
+        self.noise_transform = nn.Sequential(
+            CustomStackedDecodeModule(in_channels=56, out_channels=56),
+            CustomStackedDecodeModule(in_channels=56, out_channels=56),
+            CustomStackedDecodeModule(in_channels=56, out_channels=88),
+        )
+
         # generative module
         self.generative = nn.Sequential(
             # TODO: input resolution: ???
             # TODO: figure out if upsampling or downsampling is needed (e.g.) timm output is too large or too small
             # *LAZY* conv2d layer which automatically calculates number of in_channels
             # from merged and outputs the specified channel
-            nn.LazyConv2d(out_channels=128, kernel_size=1, padding=0),
+            nn.LazyConv2d(out_channels=256, kernel_size=1, padding=0),
             # 2x2
-            CustomStackedDecodeModule(in_channels=128, out_channels=64),
+            CustomStackedDecodeModule(in_channels=256, out_channels=128),
             nn.UpsamplingBilinear2d(scale_factor=2),
             # 4x4
-            CustomStackedDecodeModule(in_channels=64, out_channels=32),
+            CustomStackedDecodeModule(in_channels=128, out_channels=64),
             nn.UpsamplingBilinear2d(scale_factor=2),
             # 8x8
-            CustomStackedDecodeModule(in_channels=32, out_channels=16),
+            CustomStackedDecodeModule(in_channels=64, out_channels=32),
             nn.UpsamplingBilinear2d(scale_factor=2),
             # 16x16
-            CustomStackedDecodeModule(in_channels=16, out_channels=16),
+            CustomStackedDecodeModule(in_channels=32, out_channels=16),
             nn.UpsamplingBilinear2d(scale_factor=2),
+            # 32x32
             CustomStackedDecodeModule(in_channels=16, out_channels=8),
             nn.Conv2d(
                 in_channels=8,
@@ -238,23 +254,21 @@ class Generator(nn.Module):
 
     def get_generative_parameters(self):
         """Returns parameters of the generative module"""
-        return self.generative.parameters()
+        # return self.generative.parameters()
+        return [*self.generative.parameters(), *self.noise_transform.parameters()]
 
     def forward(self, img, noise):
         # extract features from image
         features = self.feature_extractor(img)[0]
         # TODO: test the need of subnetwork for noise processing
+        transformed_noise = self.noise_transform(noise)
 
         # merge noise with features
         # => noise and features need to have *same* dimensions if concatenated
         # => merging at dim=1 means concat at channel dim => (b, c, h, w)
         # TODO: check out adaptive instance normalization
         #
-
-        # Use AdaIN to merge noise with features
-        # merged = self.adain(features, noise)
-        # merged = self.film(features, noise)
-        merged = torch.cat((features, noise), dim=1)
+        merged = torch.cat((features, transformed_noise), dim=1)
 
         # compute output image
         output_img = self.generative(merged)
@@ -262,3 +276,4 @@ class Generator(nn.Module):
         transformed_output = torch.tanh(output_img)
 
         return transformed_output
+

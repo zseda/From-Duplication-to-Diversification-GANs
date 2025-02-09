@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import timm
+import torch.utils
 
 from ._generator import StackedDecodingModule
 
@@ -29,20 +30,25 @@ class DiscriminatorCustom(nn.Module):
     def __init__(self):
         super().__init__()
 
+        norm_layer = nn.utils.spectral_norm
         self.pipeline = nn.Sequential(
-            StackedDecodingModule(3, 32, norm_layer=nn.BatchNorm2d),
-            StackedDecodingModule(32, 64, norm_layer=nn.BatchNorm2d),
+            StackedDecodingModule(3, 32, norm_layer=norm_layer),
+            StackedDecodingModule(32, 64, norm_layer=norm_layer),
             nn.MaxPool2d(kernel_size=2, stride=2),  # 16x16
-            StackedDecodingModule(64, 128, norm_layer=nn.BatchNorm2d),
-            StackedDecodingModule(128, 256, norm_layer=nn.BatchNorm2d),
+            StackedDecodingModule(64, 128, norm_layer=norm_layer),
+            StackedDecodingModule(128, 256, norm_layer=norm_layer),
             nn.MaxPool2d(kernel_size=2, stride=2),  # 8x8
-            StackedDecodingModule(256, 256, norm_layer=nn.BatchNorm2d),
-            StackedDecodingModule(256, 128, norm_layer=nn.BatchNorm2d),
+            StackedDecodingModule(256, 256, norm_layer=norm_layer),
+            StackedDecodingModule(256, 128, norm_layer=norm_layer),
             nn.Flatten(),
             nn.Linear(128 * 8 * 8, 1),
         )
 
-    def forward(self, x):
+    def forward_logits(self, x):
         x = self.pipeline(x)
+        return x
+
+    def forward(self, x):
+        x = self.forward_logits(x)
         x = torch.sigmoid(x)
         return x

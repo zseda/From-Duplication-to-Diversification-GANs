@@ -5,7 +5,8 @@ import wandb
 from loguru import logger
 from pytorch_lightning.loggers import WandbLogger
 from datetime import datetime
-from src.models import Generator2 as Generator, Discriminator2 as Discriminator
+from src.models import Generator2 as Generator
+from src.models import DiscriminatorCustom as Discriminator
 from src.data import get_single_cifar10_dataloader as get_cifar10_dataloader
 from pytorch_msssim import SSIM
 import os
@@ -85,7 +86,8 @@ class GAN(pl.LightningModule):
         images, _ = batch
         images = images.to(self.device)
         batch_size = images.size(0)
-        noise = torch.rand(size=(batch_size, 56, 2, 2)).to(self.device)
+        # noise = torch.rand(size=(batch_size, 56, 2, 2)).to(self.device)
+        noise = torch.randn(size=(batch_size, 56, 2, 2)).to(self.device)
 
         # soft labels
         # TODO: try out more or less randomness
@@ -95,12 +97,13 @@ class GAN(pl.LightningModule):
         # Discriminator update
         self.opt_g.zero_grad()
         self.opt_d.zero_grad()
-        real_loss = self.criterion_D(self.discriminator(images), valid)
+        real_loss = self.criterion_D(self.discriminator.forward_logits(images), valid)
         fake_loss = self.criterion_D(
-            self.discriminator(self.generator(images, noise)), fake
+            self.discriminator.forward_logits(self.generator(images, noise)), fake
         )
         loss_d = (real_loss + fake_loss) / 2
-        if self.d_ema_g_ema_diff > -0.15:
+        # if self.d_ema_g_ema_diff > -0.15:
+        if self.d_ema_g_ema_diff > -0.1:
             self.manual_backward(loss_d)
             self.opt_d.step()
 
@@ -113,12 +116,16 @@ class GAN(pl.LightningModule):
         gen_imgs = self.generator(images, noise)
 
         # TODO: try out no soft-labels for generator (only for discriminator)
-        loss_g_div = self.criterion_G(self.discriminator(gen_imgs))
-        gen_images_id = self.generator(images, torch.zeros_like(noise))
+        loss_g_div = self.criterion_G(self.discriminator.forward_logits(gen_imgs))
+        # scaled (down) normal distribution noise for identity loss
+        gen_images_id = self.generator(images, torch.randn_like(noise) * 0.1)
         loss_g_id_ssim = 1 - self.ssim(gen_images_id, images)
-        loss_g_id_mse = torch.mean((gen_images_id - images) ** 2) * 2
+        # loss_g_id_mse = torch.mean((gen_images_id - images) ** 2) * 2
+        loss_g_id_mse = torch.mean((gen_images_id - images) ** 2)
         loss_g_id = loss_g_id_ssim + loss_g_id_mse
+        # loss_g_id = loss_g_id_ssim
         loss_g = loss_g_div + loss_g_id
+        # loss_g = loss_g_div
         if self.d_ema_g_ema_diff < 0.15:
             self.manual_backward(loss_g)
             self.opt_g.step()
@@ -195,7 +202,7 @@ class GAN(pl.LightningModule):
 
     def train_dataloader(self):
         logger.info("Loading training data...")
-        return get_cifar10_dataloader(target_class=4, batch_size=128, num_workers=8)[0]
+        return get_cifar10_dataloader(target_class=4, batch_size=256, num_workers=16)[0]
 
     def on_train_start(self) -> None:
         self.custom_experiment_id = self.trainer.logger.experiment.id
@@ -233,7 +240,10 @@ def train(
     wandb_logger = WandbLogger()
 
     # Check for GPU availability
-    gpus = 1 if torch.cuda.is_available() else 0
+    if torch.cuda.is_available() or torch.backends.mps.is_available():
+        gpus = 1
+    else:
+        gpus = 0
 
     logger.info("Starting training...")
 
@@ -242,10 +252,16 @@ def train(
         "high"
     )  # or 'high' based on your precision needs
 
+    # choose accelerator
+    if torch.cuda.is_available() or torch.backends.mps.is_available():
+        accelerator = "gpu"
+    else:
+        accelerator = "cpu"
+
     # Initialize the Trainer with the provided max_epochs
     trainer = pl.Trainer(
         max_epochs=max_epochs,
-        accelerator="gpu",
+        accelerator=accelerator,
         devices=gpus,
         logger=wandb_logger,
     )
